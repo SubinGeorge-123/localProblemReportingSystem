@@ -1,0 +1,146 @@
+{% extends 'base.html' %} {% block content %}
+<style>
+  body {
+    background-color: #ecedee;
+    font-family: "Poppins", sans-serif;
+  }
+
+  .issue-container {
+    max-width: 800px;
+    margin: 60px auto;
+    padding: 40px 35px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    color: #1f2937;
+    border: 1px solid #d1d5db;
+  }
+
+  .issue-container h2 {
+    font-size: 28px;
+    font-weight: 700;
+    text-align: center;
+    color: #111827;
+    margin-bottom: 10px;
+  }
+
+  /* ✅ Two-column grid layout */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0px 25px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ✅ Make textarea and image fields full width */
+  .form-group.full-width {
+    grid-column: span 2;
+  }
+
+  .form-group label {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 2px;
+  }
+
+  .form-control,
+  textarea {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    background-color: #f9fafb;
+    color: #1f2937;
+    transition: all 0.3s ease;
+  }
+
+  .form-control:focus,
+  textarea:focus {
+    outline: none;
+    border-color: #10b981;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  }
+
+  textarea {
+    resize: none;
+    height: 150px;
+  }
+
+  .btn-submit {
+    background: #10b981;
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 10px 18px;
+    width: 48%;
+    transition: all 0.3s ease;
+  }
+
+  .btn-submit:hover {
+    background: #059669;
+    transform: scale(1.03);
+  }
+
+  .btn-cancel {
+    background: #6b7280;
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 10px 18px;
+    width: 48%;
+    transition: all 0.3s ease;
+    text-align: center;
+  }
+
+  .btn-cancel:hover {
+    background: #4b5563;
+    transform: scale(1.03);
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 25px;
+    gap: 10px;
+  }
+</style>
+
+<div class="issue-container">
+  <h2>Create New Issue</h2>
+  <form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="form-grid">
+      {% for field in form %} {% if field.name == 'description' %}
+      <div class="form-group full-width">
+        {{ field.label_tag }} {{ field }} {% if field.errors %}
+        <div class="text-danger" style="font-size: 0.9rem">
+          {{ field.errors }}
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="form-group">
+        {{ field.label_tag }} {{ field }} {% if field.errors %}
+        <div class="text-danger" style="font-size: 0.9rem">
+          {{ field.errors }}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %} {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-submit">Submit</button>
+      <a href="{% url 'dashboard' %}" class="btn btn-cancel">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

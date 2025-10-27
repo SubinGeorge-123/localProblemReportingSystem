@@ -1,0 +1,151 @@
+{% extends 'base.html' %} {% block content %}
+<style>
+  body {
+    background-color: #ecedee;
+    font-family: "Poppins", sans-serif;
+  }
+
+  .dashboard-container {
+    max-width: 1000px;
+    margin: 50px auto;
+    padding: 30px;
+    background-color: #ecedee;
+    border-radius: 20px;
+    color: #1f2937;
+  }
+
+  .dashboard-container h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: #111827;
+  }
+
+  .dashboard-container h4 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: #1f2937;
+  }
+
+  .btn-custom {
+    background: #10b981;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 500;
+    padding: 8px 18px;
+    transition: all 0.3s ease;
+  }
+
+  .btn-custom:hover {
+    background: #059669;
+    transform: scale(1.03);
+  }
+
+  .btn-danger,
+  .btn-info {
+    border-radius: 8px;
+    font-weight: 500;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    color: #1f2937;
+    background: #fff; /* full table background white */
+    border: 2px solid #000; /* full table border */
+    border-collapse: collapse;
+  }
+
+  table thead {
+    background: #f3f4f6;
+  }
+
+  table th,
+  table td {
+    vertical-align: middle;
+    padding: 12px;
+    border: 2px solid #000; /* full cell borders */
+  }
+
+  img {
+    border-radius: 8px;
+  }
+
+  .actions a {
+    margin-right: 5px;
+  }
+
+  .top-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+</style>
+
+<div class="dashboard-container">
+  <h2>Welcome, {{ user.username }}</h2>
+
+  <div class="top-actions">
+    {% if not user.is_superuser %}
+    <a href="{% url 'create_issue' %}" class="btn btn-custom"
+      >+ Report New Issue</a
+    >
+    {% endif %}
+    <a href="{% url 'logout' %}" class="btn btn-danger">Logout</a>
+  </div>
+
+  {% if user.is_superuser %}
+  <h4>All Reported Issues</h4>
+  {% else %}
+  <h4>Your Reported Issues</h4>
+  {% endif %} {% if issues %}
+  <div class="table-wrapper mt-3">
+    <table class="table text-dark">
+      <thead>
+        <tr>
+          <th>Issue Name</th>
+          <th>Street No</th>
+          <th>Priority</th>
+          <th>Created At</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for issue in issues %}
+        <tr>
+          <td>{{ issue.issue_name }}</td>
+          <td>{{ issue.street_no }}</td>
+          <td>{{ issue.priority }}</td>
+          <td>{{ issue.created_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ issue.category }}</td>
+          <td>{{ issue.status }}</td>
+          <td class="actions">
+            <a
+              href="{% url 'update_issue' issue.id %}"
+              class="btn btn-sm btn-info"
+              >Edit</a
+            >
+            <a
+              href="{% url 'delete_issue' issue.id %}"
+              class="btn btn-sm btn-danger"
+              >Delete</a
+            >
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p>No issues reported yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
