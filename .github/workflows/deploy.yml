@@ -49,7 +49,7 @@ jobs:
       # 6. OWASP ZAP baseline scan (faster, outputs report)
       - name: OWASP ZAP Scan
         run: |
-          docker pull owasp/zap2docker-stable
+          docker pull owasp/zap2docker-stable:latest
           docker run --rm -t owasp/zap2docker-stable zap-baseline.py \
             -t http://localhost:8000 \
             -r zap-report.html \
