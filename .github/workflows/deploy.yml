@@ -1,0 +1,78 @@
+name: CI/CD Django to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Run Django tests
+      - name: Run Django tests
+        run: python manage.py test || exit 1
+
+      # 5. SonarQube analysis
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=localProblemReportingSystem \
+            -Dsonar.projectName="Local Problem Reporting System" \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=${SONAR_TOKEN}
+
+      # 6. OWASP ZAP baseline scan
+      - name: OWASP ZAP Scan
+        run: |
+          docker pull owasp/zap2docker-stable
+          docker run -t owasp/zap2docker-stable zap-baseline.py -t http://localhost:8000 -m 3
+
+      # 7. Build Docker image
+      - name: Build Docker Image
+        run: docker build -t localproblemreportingapp .
+
+      # 8. Configure AWS credentials
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      # 9. Deploy to existing EC2 using SSM
+      - name: Deploy to EC2
+        run: |
+          aws ssm send-command \
+            --targets "Key=instanceIds,Values=${{ secrets.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy Django Docker app" \
+            --parameters 'commands=[
+              "docker stop localproblemreportingapp || true",
+              "docker rm localproblemreportingapp || true",
+              "docker run -d -p 80:8000 localproblemreportingapp"
+            ]'
