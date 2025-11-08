@@ -33,23 +33,28 @@ jobs:
       - name: Run Django tests
         run: python manage.py test || exit 1
 
-      # 5. SonarQube analysis
+      # 5. SonarQube analysis via Docker
       - name: SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          sonar-scanner \
+          docker run --rm \
+            -v "${{ github.workspace }}:/usr/src" \
+            sonarsource/sonar-scanner-cli \
             -Dsonar.projectKey=localProblemReportingSystem \
             -Dsonar.projectName="Local Problem Reporting System" \
-            -Dsonar.sources=. \
+            -Dsonar.sources=/usr/src \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=${SONAR_TOKEN}
 
-      # 6. OWASP ZAP baseline scan
+      # 6. OWASP ZAP baseline scan (faster, outputs report)
       - name: OWASP ZAP Scan
         run: |
           docker pull owasp/zap2docker-stable
-          docker run -t owasp/zap2docker-stable zap-baseline.py -t http://localhost:8000 -m 3
+          docker run --rm -t owasp/zap2docker-stable zap-baseline.py \
+            -t http://localhost:8000 \
+            -r zap-report.html \
+            -m 3  # medium scan to reduce runtime
 
       # 7. Build Docker image
       - name: Build Docker Image
