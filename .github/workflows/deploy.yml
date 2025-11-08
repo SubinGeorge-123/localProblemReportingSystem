@@ -39,13 +39,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           docker run --rm \
-            -v "${{ github.workspace }}:/usr/src" \
-            sonarsource/sonar-scanner-cli \
-            -Dsonar.projectKey=localProblemReportingSystem \
+            -e SONAR_TOKEN=${{ secrets.SONAR_TOKEN }} \
+            -v $(pwd):/usr/src sonarsource/sonar-scanner-cli \
+            -Dsonar.projectKey=local-problem-reporting-system \
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
             -Dsonar.projectName="Local Problem Reporting System" \
-            -Dsonar.sources=/usr/src \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.login=${SONAR_TOKEN}
+            -Dsonar.sources=.
 
       # 6. OWASP ZAP baseline scan (faster, outputs report)
       - name: OWASP ZAP Scan
