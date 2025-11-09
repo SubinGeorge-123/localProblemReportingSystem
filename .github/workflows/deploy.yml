@@ -12,27 +12,22 @@ jobs:
       AWS_REGION: us-east-1
 
     steps:
-      # 1. Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3. Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4. Run Django tests
       - name: Run Django tests
-        run: python manage.py test || exit 1
+        run: python manage.py test
 
-      # 5. SonarQube analysis
       - name: SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -45,102 +40,58 @@ jobs:
             -Dsonar.projectName="Local Problem Reporting System" \
             -Dsonar.sources=.
 
-      # 6. Build Docker image for ZAP testing
       - name: Build Docker Image
         run: docker build -t localproblemreportingapp .
 
-      # 7. OWASP ZAP Security Scan
-      - name: OWASP ZAP Security Scan
-        id: zap-scan
+      - name: Run Docker container for ZAP testing
         run: |
-          echo "=== Starting Django app for ZAP scan ==="
-          docker network create zapnet
+          docker run -d --name localproblemreportingapp -p 8000:8000 localproblemreportingapp
+          sleep 10
 
-          # Run Django in a shared network
-          docker run -d --name django-app --network zapnet -p 8000:8000 localproblemreportingapp
-
-          echo "Waiting for Django to start..."
-          for i in {1..12}; do
-            if curl -f http://localhost:8000/ > /dev/null 2>&1; then
-              echo "✅ Django app is up!"
-              break
-            fi
-            if [ $i -eq 12 ]; then
-              echo "❌ Django failed to start"
-              docker logs django-app
-              exit 1
-            fi
-            echo "⏳ Waiting... ($i/12)"
-            sleep 10
-          done
-
-          echo "=== Running OWASP ZAP scan ==="
-          docker pull ghcr.io/zaproxy/zaproxy:stable
-
-          docker run --rm --network zapnet \
+      - name: OWASP ZAP Scan
+        run: |
+          echo "=== Running OWASP ZAP Scan ==="
+          docker run --rm \
+            --network host \
             -v $(pwd):/zap/wrk/:rw \
-            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-            -t http://django-app:8000 \
-            -r /zap/wrk/zap-report.html \
-            -x /zap/wrk/zap-report.xml \
-            -J /zap/wrk/zap-report.json \
-            -w /zap/wrk/zap-report.md \
-            -I -j
-
+            -t owasp/zap2docker-weekly zap-baseline.py \
+            -t http://localhost:8000 \
+            -r zap-report.html \
+            -w zap-report.md \
+            -x zap-report.xml \
+            -J zap-report.json
           echo "ZAP scan complete!"
-        continue-on-error: true
 
-      # 8. Upload ZAP Scan Reports
-      - name: Upload ZAP Scan Reports
-        if: success() || failure()
+      - name: Upload ZAP Reports
         uses: actions/upload-artifact@v4
         with:
-          name: zap-security-reports
+          name: zap-reports
           path: |
             zap-report.html
             zap-report.xml
             zap-report.json
             zap-report.md
           if-no-files-found: ignore
-          retention-days: 30
 
-      # 9. Display ZAP Scan Summary
-      - name: Display ZAP Scan Summary
-        run: |
-          echo "=== ZAP Security Scan Summary ==="
-          if [ -f "zap-report.html" ]; then
-            echo "✅ Reports generated successfully!"
-            echo "📄 HTML: zap-report.html"
-            echo "📋 XML: zap-report.xml"
-            echo "🔧 JSON: zap-report.json"
-            echo "📝 Markdown: zap-report.md"
-          else
-            echo "⚠️ No reports found. Check ZAP logs."
-          fi
-
-      # 10. Configure AWS credentials (for any AWS CLI tasks, optional)
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      # 11. Deploy to EC2 via SSH (for AWS Academy environments)
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.EC2_PUBLIC_IP }}
+          host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             echo "🚀 Starting deployment on EC2..."
-            cd /home/ubuntu/app
-            git pull origin main || true
+            if [ ! -d "/home/ubuntu/localProblemReportingSystem" ]; then
+              git clone https://github.com/${{ github.repository }} /home/ubuntu/localProblemReportingSystem
+            else
+              cd /home/ubuntu/localProblemReportingSystem
+              git pull origin main
+            fi
+
+            cd /home/ubuntu/localProblemReportingSystem
             docker stop localproblemreportingapp || true
             docker rm localproblemreportingapp || true
-            docker rmi localproblemreportingapp || true
+            docker system prune -af || true
             docker build -t localproblemreportingapp .
-            docker run -d -p 80:8000 --name localproblemreportingapp localproblemreportingapp
+            docker run -d -p 8000:8000 localproblemreportingapp
             echo "✅ Deployment complete!"
