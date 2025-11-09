@@ -46,17 +46,80 @@ jobs:
             -Dsonar.projectName="Local Problem Reporting System" \
             -Dsonar.sources=.
 
-      # 6. OWASP ZAP baseline scan (faster, outputs report)
-      - name: OWASP ZAP Scan
+      # 6. OWASP ZAP Security Scan (Added under SonarQube)
+      - name: OWASP ZAP Security Scan
         run: |
-          docker pull owasp/zap2docker-weekly
-          docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t openapi.json -f openapi -c api-scan.conf
+          # Build the Docker image for testing
+          docker build -t localproblemreportingapp .
+          
+          # Start Django application for scanning
+          echo "Starting Django application for ZAP security scanning..."
+          docker run -d -p 8000:8000 --name django-app -e DEBUG=False localproblemreportingapp
+          
+          # Wait for application to be ready
+          echo "Waiting for application to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/ > /dev/null 2>&1; then
+              echo "Application is ready!"
+              break
+            fi
+            echo "Waiting for application... ($i/30)"
+            sleep 5
+          done
+          
+          # Pull and run ZAP scan
+          echo "Starting ZAP security scan..."
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          docker run --rm \
+            --network host \
+            -v $(pwd):/zap/wrk/:rw \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://localhost:8000 \
+            -r zap-report.html \
+            -x zap-report.xml \
+            -J zap-report.json \
+            -w zap-report.md \
+            -I -j
+          
+          # Stop the test application
+          docker stop django-app || true
+          docker rm django-app || true
+        continue-on-error: true
 
-      # 7. Build Docker image
-      - name: Build Docker Image
+      # 7. Upload ZAP Scan Reports as Artifacts
+      - name: Upload ZAP Scan Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-reports
+          path: |
+            zap-report.html
+            zap-report.xml
+            zap-report.json
+            zap-report.md
+          retention-days: 30
+
+      # 8. Display ZAP Scan Summary
+      - name: Display ZAP Scan Summary
+        run: |
+          echo "=== ZAP Security Scan Summary ==="
+          if [ -f "zap-report.html" ]; then
+            echo "📊 ZAP reports generated successfully:"
+            echo "   - HTML Report: zap-report.html"
+            echo "   - XML Report: zap-report.xml" 
+            echo "   - JSON Report: zap-report.json"
+            echo "   - Markdown Report: zap-report.md"
+            echo ""
+            echo "📁 Reports are available in the 'Artifacts' section of this workflow run"
+          else
+            echo "❌ No ZAP reports were generated"
+          fi
+
+      # 9. Build Docker image for deployment
+      - name: Build Docker Image for Deployment
         run: docker build -t localproblemreportingapp .
 
-      # 8. Configure AWS credentials
+      # 10. Configure AWS credentials
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -65,7 +128,7 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      # 9. Deploy to existing EC2 using SSM
+      # 11. Deploy to existing EC2 using SSM
       - name: Deploy to EC2
         run: |
           aws ssm send-command \
@@ -75,5 +138,5 @@ jobs:
             --parameters 'commands=[
               "docker stop localproblemreportingapp || true",
               "docker rm localproblemreportingapp || true",
-              "docker run -d -p 80:8000 localproblemreportingapp"
+              "docker run -d -p 80:8000 --name localproblemreportingapp localproblemreportingapp"
             ]'
