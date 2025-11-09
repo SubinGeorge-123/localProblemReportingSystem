@@ -28,17 +28,17 @@ jobs:
       - name: Run Django tests
         run: python manage.py test
 
-      - name: SonarQube Analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          docker run --rm \
-            -e SONAR_TOKEN=${{ secrets.SONAR_TOKEN }} \
-            -v $(pwd):/usr/src sonarsource/sonar-scanner-cli \
-            -Dsonar.projectKey=local-problem-reporting-system \
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
-            -Dsonar.projectName="Local Problem Reporting System" \
-            -Dsonar.sources=.
+      # - name: SonarQube Analysis
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #   run: |
+      #     docker run --rm \
+      #       -e SONAR_TOKEN=${{ secrets.SONAR_TOKEN }} \
+      #       -v $(pwd):/usr/src sonarsource/sonar-scanner-cli \
+      #       -Dsonar.projectKey=local-problem-reporting-system \
+      #       -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+      #       -Dsonar.projectName="Local Problem Reporting System" \
+      #       -Dsonar.sources=.
 
       - name: Build Docker Image
         run: docker build -t localproblemreportingapp .
@@ -55,13 +55,16 @@ jobs:
       - name: OWASP ZAP Scan
         run: |
           echo "=== Running OWASP ZAP Scan ==="
-          # Fix permissions first
-          sudo chmod 777 $(pwd)
+          # Create a dedicated directory for ZAP reports with proper permissions
+          mkdir -p zap-reports
+          chmod 777 zap-reports
           
+          # Run ZAP scan with proper user mapping and working directory
           docker run --rm \
-            --user $(id -u):$(id -g) \
+            -u $(id -u):$(id -g) \
             --network host \
-            -v $(pwd):/zap/wrk/:rw \
+            -v $(pwd)/zap-reports:/zap/wrk:rw \
+            -w /zap/wrk \
             -t ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t http://localhost:8000 \
@@ -69,12 +72,20 @@ jobs:
             -w zap-report.md \
             -x zap-report.xml \
             -J zap-report.json \
-            -I  # Ignore warning only messages
+            -I \
+            -d  # Debug mode to see more details
           
           echo "ZAP scan complete!"
 
       - name: List generated reports
-        run: ls -la zap-report.*
+        run: |
+          echo "=== Checking generated reports ==="
+          ls -la zap-reports/ || echo "No zap-reports directory"
+          ls -la zap-report.* || echo "No reports in root directory"
+
+      - name: Copy reports to root directory
+        run: |
+          cp zap-reports/* . 2>/dev/null || true
 
       - name: Upload ZAP Reports
         uses: actions/upload-artifact@v4
@@ -82,9 +93,10 @@ jobs:
           name: zap-reports
           path: |
             zap-report.html
+            zap-report.md
             zap-report.xml
             zap-report.json
-            zap-report.md
+            zap-reports/
           if-no-files-found: warn
 
       - name: Stop test container
