@@ -30,9 +30,18 @@ jobs:
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:8000'
-          cmd_options: '-I -j'  # Ignore warnings and use traditional spider
+          cmd_options: '-I -j'
           rules_file_name: '.zap/rules.tsv'
-          # Remove the token line - it will use GITHUB_TOKEN automatically
+
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-report
+          path: |
+            zap_scan.md
+            zap_scan.html
+          retention-days: 30
 
       - name: Stop test container
         run: |
@@ -64,7 +73,7 @@ jobs:
 
       - name: SonarQube Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}  # This one you DO need to set in secrets
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           docker run --rm \
             -e SONAR_TOKEN=${{ secrets.SONAR_TOKEN }} \
