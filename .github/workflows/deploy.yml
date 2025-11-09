@@ -46,30 +46,39 @@ jobs:
             -Dsonar.projectName="Local Problem Reporting System" \
             -Dsonar.sources=.
 
-      # 6. OWASP ZAP Security Scan (Added under SonarQube)
+      # 6. Build Docker image for ZAP testing
+      - name: Build Docker Image
+        run: docker build -t localproblemreportingapp .
+
+      # 7. OWASP ZAP Security Scan
       - name: OWASP ZAP Security Scan
+        id: zap-scan
         run: |
-          # Build the Docker image for testing
-          docker build -t localproblemreportingapp .
+          echo "Starting Django application for ZAP scanning..."
           
-          # Start Django application for scanning
-          echo "Starting Django application for ZAP security scanning..."
+          # Start Django application
           docker run -d -p 8000:8000 --name django-app -e DEBUG=False localproblemreportingapp
           
-          # Wait for application to be ready
+          # Wait for application to be ready with better checking
           echo "Waiting for application to start..."
-          for i in {1..30}; do
+          for i in {1..12}; do
             if curl -f http://localhost:8000/ > /dev/null 2>&1; then
-              echo "Application is ready!"
+              echo "✅ Application is ready!"
               break
             fi
-            echo "Waiting for application... ($i/30)"
-            sleep 5
+            if [ $i -eq 12 ]; then
+              echo "❌ Application failed to start within 2 minutes"
+              docker logs django-app
+              exit 1
+            fi
+            echo "⏳ Waiting for application... (attempt $i/12)"
+            sleep 10
           done
           
-          # Pull and run ZAP scan
+          # Run ZAP scan
           echo "Starting ZAP security scan..."
           docker pull ghcr.io/zaproxy/zaproxy:stable
+          
           docker run --rm \
             --network host \
             -v $(pwd):/zap/wrk/:rw \
@@ -82,12 +91,10 @@ jobs:
             -w zap-report.md \
             -I -j
           
-          # Stop the test application
-          docker stop django-app || true
-          docker rm django-app || true
+          echo "ZAP scan completed!"
         continue-on-error: true
 
-      # 7. Upload ZAP Scan Reports as Artifacts
+      # 8. Upload ZAP Scan Reports
       - name: Upload ZAP Scan Reports
         uses: actions/upload-artifact@v4
         with:
@@ -99,25 +106,24 @@ jobs:
             zap-report.md
           retention-days: 30
 
-      # 8. Display ZAP Scan Summary
+      # 9. Display ZAP Scan Summary
       - name: Display ZAP Scan Summary
         run: |
           echo "=== ZAP Security Scan Summary ==="
           if [ -f "zap-report.html" ]; then
-            echo "📊 ZAP reports generated successfully:"
-            echo "   - HTML Report: zap-report.html"
-            echo "   - XML Report: zap-report.xml" 
-            echo "   - JSON Report: zap-report.json"
-            echo "   - Markdown Report: zap-report.md"
+            echo "✅ ZAP reports generated successfully!"
             echo ""
-            echo "📁 Reports are available in the 'Artifacts' section of this workflow run"
+            echo "📊 Available Reports:"
+            echo "   - 📄 HTML Report: zap-report.html (Full details)"
+            echo "   - 📋 XML Report: zap-report.xml (Machine readable)"
+            echo "   - 🔧 JSON Report: zap-report.json (Integration)"
+            echo "   - 📝 Markdown Report: zap-report.md (Summary)"
+            echo ""
+            echo "📁 Download all reports from the 'Artifacts' section below"
           else
-            echo "❌ No ZAP reports were generated"
+            echo "⚠️  ZAP scan completed but no reports were generated"
+            echo "Check the ZAP scan step logs for details"
           fi
-
-      # 9. Build Docker image for deployment
-      - name: Build Docker Image for Deployment
-        run: docker build -t localproblemreportingapp .
 
       # 10. Configure AWS credentials
       - name: Configure AWS
@@ -136,7 +142,10 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Django Docker app" \
             --parameters 'commands=[
+              "cd /home/ubuntu/app",
               "docker stop localproblemreportingapp || true",
               "docker rm localproblemreportingapp || true",
+              "docker rmi localproblemreportingapp || true",
+              "docker build -t localproblemreportingapp .",
               "docker run -d -p 80:8000 --name localproblemreportingapp localproblemreportingapp"
             ]'
