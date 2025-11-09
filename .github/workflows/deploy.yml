@@ -16,37 +16,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Create working Dockerfile
-      - name: Create Dockerfile
-        run: |
-          cat > Dockerfile << 'EOF'
-FROM python:3.11-slim
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-WORKDIR /app
-RUN apt-get update && apt-get install -y gcc curl && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-# Run migrations and create superuser if needed
-RUN python manage.py migrate --noinput
-EXPOSE 8000
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
-EOF
-
-      # 3. Set up Python
+      # 2. Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 4. Install dependencies and run tests
-      - name: Install dependencies and test
+      # 3. Install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python manage.py migrate
-          python manage.py test || exit 1
+
+      # 4. Run Django tests
+      - name: Run Django tests
+        run: python manage.py test || exit 1
 
       # 5. SonarQube analysis
       - name: SonarQube Analysis
@@ -61,114 +45,80 @@ EOF
             -Dsonar.projectName="Local Problem Reporting System" \
             -Dsonar.sources=.
 
-      # 6. Build and Test Docker Image
-      - name: Build and Test Docker Image
-        run: |
-          docker build -t localproblemreportingapp .
-          # Test if the container starts
-          timeout 30s docker run --name test-container -p 8000:8000 localproblemreportingapp &
-          sleep 10
-          docker logs test-container || echo "Container logs not available"
+      # 6. Build Docker image for ZAP testing
+      - name: Build Docker Image
+        run: docker build -t localproblemreportingapp .
 
-      # 7. OWASP ZAP Security Scan (Improved)
+      # 7. OWASP ZAP Security Scan
       - name: OWASP ZAP Security Scan
         id: zap-scan
         run: |
-          echo "Starting ZAP security scan..."
-          
-          # Method 1: Try with Docker container first
-          echo "Method 1: Scanning Docker container..."
-          docker run -d -p 8000:8000 --name django-app localproblemreportingapp
-          
-          # Wait longer for Django to start
-          echo "Waiting for Django to start (up to 60 seconds)..."
+          echo "=== Starting Django app for ZAP scan ==="
+          docker network create zapnet
+
+          # Run Django in a shared network
+          docker run -d --name django-app --network zapnet -p 8000:8000 localproblemreportingapp
+
+          echo "Waiting for Django to start..."
           for i in {1..12}; do
             if curl -f http://localhost:8000/ > /dev/null 2>&1; then
-              echo "✅ Django is responding!"
+              echo "✅ Django app is up!"
               break
             fi
+            if [ $i -eq 12 ]; then
+              echo "❌ Django failed to start"
+              docker logs django-app
+              exit 1
+            fi
             echo "⏳ Waiting... ($i/12)"
-            sleep 5
+            sleep 10
           done
-          
-          # Check if application is actually running
-          if ! curl -f http://localhost:8000/ > /dev/null 2>&1; then
-            echo "❌ Django container not responding, trying direct method..."
-            docker stop django-app || true
-            docker rm django-app || true
-            
-            # Method 2: Run Django directly
-            echo "Method 2: Running Django directly..."
-            python manage.py runserver 0.0.0.0:8000 &
-            DJANGO_PID=$!
-            sleep 15
-          fi
-          
-          # Run ZAP scan
-          echo "Starting ZAP scan..."
+
+          echo "=== Running OWASP ZAP scan ==="
           docker pull ghcr.io/zaproxy/zaproxy:stable
-          
-          # Create a minimal target if main page doesn't work
-          cat > test-target.html << EOF
-<html>
-<body>
-<h1>Test Page for ZAP Scan</h1>
-<a href="/admin">Admin</a>
-<a href="/api">API</a>
-</body>
-</html>
-EOF
-          
-          docker run --rm \
-            --network host \
+
+          docker run --rm --network zapnet \
             -v $(pwd):/zap/wrk/:rw \
-            -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-            -t http://localhost:8000/ \
-            -r zap-report.html \
-            -x zap-report.xml \
-            -J zap-report.json \
-            -w zap-report.md \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://django-app:8000 \
+            -r /zap/wrk/zap-report.html \
+            -x /zap/wrk/zap-report.xml \
+            -J /zap/wrk/zap-report.json \
+            -w /zap/wrk/zap-report.md \
             -I -j
-          
-          # Cleanup
-          docker stop django-app || true
-          docker rm django-app || true
-          kill $DJANGO_PID 2>/dev/null || true
-          
-          # List any generated files
-          echo "Generated files:"
-          ls -la | grep zap || echo "No ZAP files found"
+
+          echo "ZAP scan complete!"
         continue-on-error: true
 
-      # 8. Upload any available reports
+      # 8. Upload ZAP Scan Reports
       - name: Upload ZAP Scan Reports
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: zap-security-reports
           path: |
-            zap-report.*
+            zap-report.html
+            zap-report.xml
+            zap-report.json
+            zap-report.md
+          if-no-files-found: ignore
           retention-days: 30
 
-      # 9. Debug information
-      - name: Debug Application Issues
-        if: always()
+      # 9. Display ZAP Scan Summary
+      - name: Display ZAP Scan Summary
         run: |
-          echo "=== Debug Information ==="
-          echo "Current directory: $(pwd)"
-          echo "Files in current directory:"
-          ls -la
-          echo ""
-          echo "Docker images:"
-          docker images || echo "Docker not available"
-          echo ""
-          echo "If ZAP scan failed, check:"
-          echo "1. Is Django application starting properly?"
-          echo "2. Check ALLOWED_HOSTS in settings.py"
-          echo "3. Check if port 8000 is available"
+          echo "=== ZAP Security Scan Summary ==="
+          if [ -f "zap-report.html" ]; then
+            echo "✅ Reports generated successfully!"
+            echo "📄 HTML: zap-report.html"
+            echo "📋 XML: zap-report.xml"
+            echo "🔧 JSON: zap-report.json"
+            echo "📝 Markdown: zap-report.md"
+          else
+            echo "⚠️ No reports found. Check ZAP logs."
+          fi
 
-      # 10. Configure AWS credentials
+      # 10. Configure AWS credentials (for any AWS CLI tasks, optional)
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -177,41 +127,20 @@ EOF
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      # 11. Deploy to EC2 (Fixed permissions)
-      - name: Deploy to EC2 via SCP
-        run: |
-          # Alternative deployment method using SCP/SSH
-          echo "Setting up SSH deployment..."
-          
-          # Create deployment script
-          cat > deploy.sh << 'EOF'
-#!/bin/bash
-cd /home/ubuntu/app
-git pull origin main
-docker stop localproblemreportingapp || true
-docker rm localproblemreportingapp || true
-docker rmi localproblemreportingapp || true
-docker build -t localproblemreportingapp .
-docker run -d -p 80:8000 --name localproblemreportingapp localproblemreportingapp
-EOF
-          
-          # Copy files to EC2 (you'll need to set up SSH key in secrets)
-          scp -o StrictHostKeyChecking=no -r . ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/app/ || echo "SCP failed, continuing..."
-          
-          # Execute deployment script on EC2
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} 'bash -s' < deploy.sh || echo "SSH deployment failed"
-        continue-on-error: true
-
-      # 12. Alternative: Simple deployment notification
-      - name: Deployment Notification
-        if: always()
-        run: |
-          echo "=== Deployment Status ==="
-          echo "CI/CD pipeline completed up to deployment preparation."
-          echo "To complete deployment, ensure your IAM user has SSM permissions:"
-          echo "Required IAM permissions:"
-          echo "  - ssm:SendCommand"
-          echo "  - ssm:ListCommands" 
-          echo "  - ec2:DescribeInstances"
-          echo ""
-          echo "Or use SSH-based deployment as shown above."
+      # 11. Deploy to EC2 via SSH (for AWS Academy environments)
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🚀 Starting deployment on EC2..."
+            cd /home/ubuntu/app
+            git pull origin main || true
+            docker stop localproblemreportingapp || true
+            docker rm localproblemreportingapp || true
+            docker rmi localproblemreportingapp || true
+            docker build -t localproblemreportingapp .
+            docker run -d -p 80:8000 --name localproblemreportingapp localproblemreportingapp
+            echo "✅ Deployment complete!"
