@@ -51,16 +51,19 @@ jobs:
       - name: OWASP ZAP Scan
         run: |
           echo "=== Running OWASP ZAP Scan ==="
+          docker pull ghcr.io/zaproxy/zaproxy:stable
           docker run --rm \
             --network host \
             -v $(pwd):/zap/wrk/:rw \
-            -t owasp/zap2docker-weekly zap-baseline.py \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
             -t http://localhost:8000 \
             -r zap-report.html \
             -w zap-report.md \
             -x zap-report.xml \
             -J zap-report.json
           echo "ZAP scan complete!"
+
 
       - name: Upload ZAP Reports
         uses: actions/upload-artifact@v4
