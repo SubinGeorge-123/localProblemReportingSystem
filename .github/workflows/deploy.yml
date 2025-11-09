@@ -49,11 +49,8 @@ jobs:
       # 6. OWASP ZAP baseline scan (faster, outputs report)
       - name: OWASP ZAP Scan
         run: |
-          docker pull owasp/zap2docker-stable:latest
-          docker run --rm -t owasp/zap2docker-stable zap-baseline.py \
-            -t http://localhost:8000 \
-            -r zap-report.html \
-            -m 3  # medium scan to reduce runtime
+          docker pull owasp/zap2docker-weekly
+          docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t openapi.json -f openapi -c api-scan.conf
 
       # 7. Build Docker image
       - name: Build Docker Image
