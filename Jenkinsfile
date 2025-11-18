@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "subin/localProblemReportingSystem"
+        IMAGE_NAME = "subin/localproblemreportingsystem"
         IMAGE_TAG = "latest"
         SONAR_HOST_URL = 'http://host.docker.internal:9000'
         SONAR_TOKEN    = credentials('sonar_token')
