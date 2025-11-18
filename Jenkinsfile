@@ -5,9 +5,9 @@ pipeline {
         IMAGE_NAME = "subin/localProblemReportingSystem"
         IMAGE_TAG = "latest"
         SONAR_HOST_URL = 'http://host.docker.internal:9000'
-        SONAR_TOKEN    = credentials('sonarToken')
-        SONAR_KEY      = credentials('sonarKey')
-        EC2_IP = credentials('ec2Ip')
+        SONAR_TOKEN    = credentials('sonar_token')
+        SONAR_KEY      = credentials('sonar_key')
+        EC2_IP = credentials('ec2_ip')
     }
 
     parameters {
@@ -20,7 +20,7 @@ pipeline {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/SubinGeorge-123/localProblemReportingSystem.git',
-                    credentialsId: 'GITHUB_CREDENTIALS'
+                    credentialsId: 'github_credential'
             }
         }
 
@@ -97,7 +97,7 @@ pipeline {
 
         stage('Push Docker Image to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CRED', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                     sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
@@ -109,8 +109,8 @@ pipeline {
                 expression { params.DEPLOY_EC2 }
             }
             steps {
-                sshagent(['ec2Key']) {
-                    withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CRED', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                sshagent(['ec2-key']) {
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                             ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
                             set -x
