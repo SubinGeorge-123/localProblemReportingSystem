@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = "subin/localproblemreportingsystem"
         IMAGE_TAG = "latest"
-        SONAR_HOST_URL = 'http://host.docker.internal:9000'
+        SONAR_HOST_URL = 'https://sonarcloud.io'
         SONAR_TOKEN    = credentials('sonar_token')
         SONAR_KEY      = credentials('sonar_key')
         EC2_IP = credentials('ec2_ip')
