@@ -77,29 +77,31 @@ pipeline {
 
 
         stage('ZAP Scan') {
-            steps {
-                script {
-                    try {
-                        sh "docker run -d --name er_scan -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
-                        sh "sleep 10"
-
-                        sh """
-                            docker run --rm --network host \
-                               -v /var/lib/jenkins:/zap/wrk \
-                               --user root \
-                               ghcr.io/zaproxy/zaproxy:stable \
-                               zap-full-scan.py -t http://host.docker.internal:8000 \
-                               -r /zap/wrk/zap_report.html -m 1 -T 2 \
-                               -z "-config api.disablekey=true -config scanner.threadPerHost=2" || true
-                        """
-
-                    } finally {
-                        sh "docker stop er_scan || true"
-                        sh "docker rm er_scan || true"
-                    }
-                }
+    steps {
+        script {
+            try {
+                sh "docker network create devnet || true"
+                sh "docker run -d --name er_scan --network devnet subin/localproblemreportingsystem:latest"
+                sh """
+                    until curl -s http://er_scan:8000 > /dev/null; do
+                        echo "Waiting for Django..."
+                        sleep 5
+                    done
+                """
+                sh """
+                    docker run --rm --network devnet -v /var/lib/jenkins:/zap/wrk --user root \
+                        ghcr.io/zaproxy/zaproxy:stable \
+                        zap-full-scan.py -t http://er_scan:8000 -r /zap/wrk/zap_report.html \
+                        -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2"
+                """
+            } finally {
+                sh "docker stop er_scan || true"
+                sh "docker rm er_scan || true"
             }
         }
+    }
+}
+
 
         stage('Push Docker Image to Docker Hub') {
             steps {
