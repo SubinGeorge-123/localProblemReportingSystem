@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-f-z%uc%4-9=^)0ul0+u=v0ahlh)3ni_&der_hky+go#sa4(!xa'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [ 'localhost', '127.0.0.1','*']
 
@@ -129,14 +129,14 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Security middleware settings - won't affect design
-SECURE_BROWSER_XSS_FILTER = True
-SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+# # Security middleware settings - won't affect design
+# SECURE_BROWSER_XSS_FILTER = True
+# SECURE_CONTENT_TYPE_NOSNIFF = True
+# X_FRAME_OPTIONS = 'DENY'
 
-# Cookie security - won't affect design
-SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = True
+# # Cookie security - won't affect design
+# SESSION_COOKIE_HTTPONLY = True
+# CSRF_COOKIE_HTTPONLY = True
 
-# Hide server info - won't affect design
-SECURE_HIDE_SERVER_VERSION = True
+# # Hide server info - won't affect design
+# SECURE_HIDE_SERVER_VERSION = True

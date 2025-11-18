@@ -1,0 +1,61 @@
+version: '3.8'
+ 
+services:
+  web:
+    build: .
+    container_name: er_system_app
+    command: bash -c "python manage.py migrate && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - devnet
+    volumes:
+      - django_data:/app
+    depends_on:
+      - sonarqube
+      - zap
+    restart: no
+    profiles:
+      - dev
+ 
+  sonarqube:
+    image: sonarqube:lts-community
+    container_name: sonarqube
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    ports:
+      - "9000:9000"
+    networks:
+      - devnet
+    restart: always
+ 
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: zap
+    command:
+    - zap.sh
+    - -daemon
+    - -host
+    - 0.0.0.0
+    - -port
+    - "8090"
+    - -config
+    - api.addrs.addr.name=.*
+    - -config
+    - api.addrs.addr.regex=true
+    - -config
+    - api.disablekey=true
+    ports:
+      - "8090:8090"
+    networks:
+      - devnet
+    restart: always
+ 
+volumes:
+  django_data:
+ 
+networks:
+  devnet:
+    driver: bridge
