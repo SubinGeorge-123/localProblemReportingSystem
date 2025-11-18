@@ -143,13 +143,13 @@ SESSION_COOKIE_SECURE = True    # Only over HTTPS
 CSRF_COOKIE_SECURE = True       # Only over HTTPS
 
 
-CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # adjust as needed
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
-CSP_IMG_SRC = ("'self'", "data:")
-SECURE_REFERRER_POLICY = 'no-referrer'
-SECURE_CONTENT_SECURITY_POLICY = {
-    'permissions-policy': "geolocation=(self), microphone=()"
-}
+# CSP_DEFAULT_SRC = ("'self'",)
+# CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # adjust as needed
+# CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
+# CSP_IMG_SRC = ("'self'", "data:")
+# SECURE_REFERRER_POLICY = 'no-referrer'
+# SECURE_CONTENT_SECURITY_POLICY = {
+#     'permissions-policy': "geolocation=(self), microphone=()"
+# }
 
 
