@@ -67,8 +67,9 @@ pipeline {
                         -Dsonar.sources=. \
                         -Dsonar.host.url=${SONAR_HOST_URL} \
                         -Dsonar.organization=${SONAR_ORGANIZATION} \
-                        -Dsonar.exclusions=**/node_modules/**,**/*.min.js,**/*.bundle.js,**/vendor/**,**/test/**,**/tests/**,**/migrations/** \
+                        -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/**
                         -Dsonar.login=${SONAR_TOKEN}
+                        -Dsonar.python.coverage.reportPaths=coverage.xml
                 """
             }
         }
