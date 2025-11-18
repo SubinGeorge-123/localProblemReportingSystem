@@ -6,7 +6,7 @@ pipeline {
         IMAGE_TAG = "latest"
         SONAR_HOST_URL = 'https://sonarcloud.io'
         SONAR_TOKEN    = credentials('sonar_token')
-        SONAR_KEY      = credentials('sonar_key')
+        SONAR_KEY      = 'subingeorge-123_localproblemreportingsystem'
         SONAR_ORGANIZATION = 'subingeorge-123'
         EC2_IP = credentials('ec2_ip')
     }
@@ -57,22 +57,24 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            steps {
-                sh """
-                    docker run --rm \
-                        -v \$PWD:/usr/src \
-                        -w /usr/src \
-                        sonarsource/sonar-scanner-cli \
-                        -Dsonar.projectKey=${SONAR_KEY} \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.organization=${SONAR_ORGANIZATION} \
-                        -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/**
-                        -Dsonar.login=${SONAR_TOKEN}
-                        -Dsonar.python.coverage.reportPaths=coverage.xml
-                """
-            }
-        }
+    steps {
+        sh """
+            docker run --rm \
+                -e SONAR_TOKEN=${SONAR_TOKEN} \
+                -v \$PWD:/usr/src \
+                -w /usr/src \
+                sonarsource/sonar-scanner-cli \
+                -Dsonar.projectKey=${SONAR_KEY} \
+                -Dsonar.organization=${SONAR_ORGANIZATION} \
+                -Dsonar.host.url=${SONAR_HOST_URL} \
+                -Dsonar.sources=. \
+                -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
+                -Dsonar.login=\$SONAR_TOKEN \
+                -Dsonar.python.coverage.reportPaths=coverage.xml
+        """
+    }
+}
+
 
         stage('ZAP Scan') {
             steps {
