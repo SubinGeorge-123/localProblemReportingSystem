@@ -67,6 +67,7 @@ pipeline {
                         -Dsonar.sources=. \
                         -Dsonar.host.url=${SONAR_HOST_URL} \
                         -Dsonar.organization=${SONAR_ORGANIZATION} \
+                        -Dsonar.exclusions=**/node_modules/**,**/*.min.js,**/*.bundle.js,**/vendor/**,**/test/**,**/tests/**,**/migrations/** \
                         -Dsonar.login=${SONAR_TOKEN}
                 """
             }
