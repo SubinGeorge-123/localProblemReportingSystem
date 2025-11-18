@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from pathlib import Path
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -135,16 +136,16 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_HSTS_SECONDS = 31536000  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
-SECURE_SSL_REDIRECT = True  # if using HTTPS
+
+SECURE_SSL_REDIRECT = not ('test' in sys.argv)
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = True    # Only over HTTPS
 CSRF_COOKIE_SECURE = True       # Only over HTTPS
 
-
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # adjust as needed
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")
 CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
 CSP_IMG_SRC = ("'self'", "data:")
 SECURE_REFERRER_POLICY = 'no-referrer'
@@ -152,4 +153,7 @@ SECURE_CONTENT_SECURITY_POLICY = {
     'permissions-policy': "geolocation=(self), microphone=()"
 }
 
-
+if 'test' in sys.argv:
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
