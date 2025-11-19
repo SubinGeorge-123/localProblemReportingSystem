@@ -36,26 +36,25 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image & Run Tests') {
+         stage('Build Docker Image & Run Tests') {
             steps {
                 script {
                     try {
+                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+
+                        // Run test container (use a deterministic name and map host port 8000 temporarily for tests if needed)
+                        sh "docker run -d --name localProblemReportingSystem_test -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
+                        sh "docker exec localProblemReportingSystem_test python3 manage.py test"
+                    } finally {
+                        // ensure cleanup
                         sh """
-                            docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                        """
-                        sh "docker run -d --name localProblemReportingSystem -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
-                        sh "docker exec localProblemReportingSystem python3 manage.py test"
-                    }
-                    finally {
-                        sh """
-                            docker stop localProblemReportingSystem || true
-                            docker rm localProblemReportingSystem || true
+                            docker stop localProblemReportingSystem_test || true
+                            docker rm localProblemReportingSystem_test || true
                         """
                     }
                 }
             }
         }
-
 //         stage('SonarQube Analysis') {
 //     steps {
 //         sh """
@@ -76,51 +75,57 @@ pipeline {
 // }
 
 
-stage('ZAP Scan') {
-    steps {
-        script {
-            try {
-                sh "docker network create devnet || true"
-                sh "docker rm -f er_scan || true"
-                
-                sh """
-                    docker run -d --name er_scan -p 8000:8000 --network devnet ${IMAGE_NAME}:${IMAGE_TAG}
-                """
+        stage('ZAP Scan') {
+            steps {
+                script {
+                    try {
+                        // create network and cleanup any prior leftover container
+                        sh "docker network create devnet || true"
+                        sh "docker rm -f er_scan || true"
 
-                // Robust wait with timeout
-                sh """
-                    timeout=180
-                    counter=0
-                    while ! curl -f -s http://er_scan:8000/ > /dev/null; do
-                        if [ \$counter -ge \$timeout ]; then
-                            echo "Timeout waiting for Django"
-                            exit 1
-                        fi
-                        echo "Waiting for Django... (\$counter seconds)"
-                        sleep 5
-                        counter=\$((counter + 5))
-                    done
-                    echo "Django is ready after \$counter seconds"
-                    sleep 10  # Extra safety margin
-                """
+                        // Run the app container for scanning. DO NOT bind host port 8000 to avoid collisions.
+                        // Expose ALLOWED_HOSTS so Django accepts requests for container hostname.
+                        sh """
+                            docker run -d --name er_scan --network devnet -e ALLOWED_HOSTS="*" ${IMAGE_NAME}:${IMAGE_TAG}
+                        """
 
-                // Run ZAP - don't fail build on findings
-                sh """
-                    docker run --rm --network devnet -v /var/lib/jenkins:/zap/wrk --user root \
-                        ghcr.io/zaproxy/zaproxy:stable \
-                        zap-full-scan.py -t http://er_scan:8000 -r /zap/wrk/zap_report.html \
-                        -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2" \
-                        -I || echo "ZAP scan found issues (this is expected)"
-                """
-                
-            } finally {
-                sh "docker rm -f er_scan || true"
+                        // Wait for the app to become healthy by curling localhost from inside the container
+                        sh """
+                            timeout=180
+                            counter=0
+                            while ! docker exec er_scan sh -c 'curl -f -s http://localhost:8000/ >/dev/null'; do
+                                if [ \$counter -ge \$timeout ]; then
+                                    echo "Timeout waiting for Django (after \$counter seconds)"
+                                    echo "=== er_scan logs ==="
+                                    docker logs er_scan || true
+                                    echo "=== end logs ==="
+                                    exit 1
+                                fi
+                                echo "Waiting for Django... (\$counter seconds)"
+                                sleep 5
+                                counter=\$((counter + 5))
+                            done
+                            echo "Django is ready after \$counter seconds"
+                            sleep 5
+                        """
+
+                        // Run ZAP in the same network, pointing to er_scan on internal port 8000
+                        sh """
+                            docker run --rm --network devnet -v /var/lib/jenkins:/zap/wrk --user root \
+                                ghcr.io/zaproxy/zaproxy:stable \
+                                zap-full-scan.py -t http://er_scan:8000 -r /zap/wrk/zap_report.html \
+                                -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2" \
+                                -I || echo "ZAP scan found issues (this is expected)"
+                        """
+                    } finally {
+                        // Remove the app container used for scanning
+                        sh "docker rm -f er_scan || true"
+                    }
+                }
             }
         }
-    }
-}
 
-
+      
         stage('Push Docker Image to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -138,7 +143,7 @@ stage('ZAP Scan') {
                 sshagent(['ec2-key']) {
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
-                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
+                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
                             set -x
                             docker login -u $DOCKER_USER -p $DOCKER_PASS
                             docker pull subin/localProblemReportingSystem:latest
