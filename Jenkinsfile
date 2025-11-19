@@ -55,24 +55,24 @@ pipeline {
                 }
             }
         }
-//         stage('SonarQube Analysis') {
-//     steps {
-//         sh """
-//             docker run --rm \
-//                 -e SONAR_TOKEN=${SONAR_TOKEN} \
-//                 -v \$PWD:/usr/src \
-//                 -w /usr/src \
-//                 sonarsource/sonar-scanner-cli \
-//                 -Dsonar.projectKey=${SONAR_KEY} \
-//                 -Dsonar.organization=${SONAR_ORGANIZATION} \
-//                 -Dsonar.host.url=${SONAR_HOST_URL} \
-//                 -Dsonar.sources=. \
-//                 -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
-//                 -Dsonar.login=\$SONAR_TOKEN \
-//                 -Dsonar.python.coverage.reportPaths=coverage.xml
-//         """
-//     }
-// }
+        stage('SonarQube Analysis') {
+    steps {
+        sh """
+            docker run --rm \
+                -e SONAR_TOKEN=${SONAR_TOKEN} \
+                -v \$PWD:/usr/src \
+                -w /usr/src \
+                sonarsource/sonar-scanner-cli \
+                -Dsonar.projectKey=${SONAR_KEY} \
+                -Dsonar.organization=${SONAR_ORGANIZATION} \
+                -Dsonar.host.url=${SONAR_HOST_URL} \
+                -Dsonar.sources=. \
+                -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
+                -Dsonar.login=\$SONAR_TOKEN \
+                -Dsonar.python.coverage.reportPaths=coverage.xml
+        """
+    }
+}
 
 
        stage('ZAP Scan') {
@@ -148,13 +148,13 @@ pipeline {
                             ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
                             set -x
                             docker login -u $DOCKER_USER -p $DOCKER_PASS
-                            docker pull subingeorge2000/localProblemReportingSystem:latest
-                            docker rm -f localProblemReportingSystem || true
+                            docker pull subingeorge2000/localproblemreportingsystem:latest
+                            docker rm -f localproblemreportingsystem || true
 
-                            docker run -d -p 8000:8000 --name localProblemReportingSystem \
+                            docker run -d -p 8000:8000 --name localproblemreportingsystem \
                                 --restart unless-stopped \
                                 -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
-                                subingeorge2000/localProblemReportingSystem:latest
+                                subingeorge2000/localproblemreportingsystem:latest
 EOF
                         """
                     }
