@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "subin/localproblemreportingsystem"
+        IMAGE_NAME = "subingeorge2000/localproblemreportingsystem"
         IMAGE_TAG = "latest"
         SONAR_HOST_URL = 'https://sonarcloud.io'
         SONAR_TOKEN    = credentials('sonar_token')
@@ -148,13 +148,13 @@ pipeline {
                             ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
                             set -x
                             docker login -u $DOCKER_USER -p $DOCKER_PASS
-                            docker pull subin/localProblemReportingSystem:latest
+                            docker pull subingeorge2000/localProblemReportingSystem:latest
                             docker rm -f localProblemReportingSystem || true
 
                             docker run -d -p 8000:8000 --name localProblemReportingSystem \
                                 --restart unless-stopped \
                                 -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
-                                subin/localProblemReportingSystem:latest
+                                subingeorge2000/localProblemReportingSystem:latest
 EOF
                         """
                     }
