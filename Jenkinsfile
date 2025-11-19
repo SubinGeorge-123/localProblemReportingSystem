@@ -80,28 +80,28 @@ stage('ZAP Scan') {
     steps {
         script {
             try {
-                // Create network if not exists
+                // Ensure network exists
                 sh "docker network create devnet || true"
 
-                // Remove old container if exists and start a new one
+                // Remove old container if exists and run Django
                 sh """
                     docker rm -f er_scan || true
-                    docker run -d --name er_scan -p 8000:8000 --network devnet subin/localproblemreportingsystem:latest
+                    docker run -d --name er_scan --network devnet subin/localproblemreportingsystem:latest
                 """
 
-                // Wait for Django to be ready on localhost:8000
+                // Wait until Django is ready (use container name, not localhost)
                 sh """
-                    until curl -s http://127.0.0.1:8000 > /dev/null; do
+                    until docker exec er_scan curl -s http://127.0.0.1:8000 > /dev/null; do
                         echo "Waiting for Django..."
                         sleep 5
                     done
                 """
 
-                // Run ZAP scan targeting localhost
+                // Run ZAP scan targeting Django container by name
                 sh """
                     docker run --rm --network devnet -v /var/lib/jenkins:/zap/wrk --user root \
                         ghcr.io/zaproxy/zaproxy:stable \
-                        zap-full-scan.py -t http://127.0.0.1:8000 -r /zap/wrk/zap_report.html \
+                        zap-full-scan.py -t http://er_scan:8000 -r /zap/wrk/zap_report.html \
                         -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2"
                 """
             } finally {
