@@ -55,22 +55,26 @@ pipeline {
                 }
             }
         }
-        stage('SonarQube Analysis') {
+stage('SonarQube Analysis') {
     steps {
-        sh """
-            docker run --rm \
-                -e SONAR_TOKEN=${SONAR_TOKEN} \
-                -v \$PWD:/usr/src \
-                -w /usr/src \
-                sonarsource/sonar-scanner-cli \
-                -Dsonar.projectKey=${SONAR_KEY} \
-                -Dsonar.organization=${SONAR_ORGANIZATION} \
-                -Dsonar.host.url=${SONAR_HOST_URL} \
-                -Dsonar.sources=. \
-                -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
-                -Dsonar.login=\$SONAR_TOKEN \
-                -Dsonar.python.coverage.reportPaths=coverage.xml
-        """
+        script {
+            retry(2) { // retry up to 2 times
+                sh """
+                    docker run --rm \
+                        -e SONAR_TOKEN=${SONAR_TOKEN} \
+                        -v \$PWD:/usr/src \
+                        -w /usr/src \
+                        sonarsource/sonar-scanner-cli:latest \
+                        -Dsonar.projectKey=${SONAR_KEY} \
+                        -Dsonar.organization=${SONAR_ORGANIZATION} \
+                        -Dsonar.host.url=${SONAR_HOST_URL} \
+                        -Dsonar.sources=. \
+                        -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
+                        -Dsonar.login=\$SONAR_TOKEN \
+                        -Dsonar.python.coverage.reportPaths=coverage.xml
+                """
+            }
+        }
     }
 }
 
