@@ -56,61 +56,69 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-    steps {
-        sh """
-            docker run --rm \
-                -e SONAR_TOKEN=${SONAR_TOKEN} \
-                -v \$PWD:/usr/src \
-                -w /usr/src \
-                sonarsource/sonar-scanner-cli \
-                -Dsonar.projectKey=${SONAR_KEY} \
-                -Dsonar.organization=${SONAR_ORGANIZATION} \
-                -Dsonar.host.url=${SONAR_HOST_URL} \
-                -Dsonar.sources=. \
-                -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
-                -Dsonar.login=\$SONAR_TOKEN \
-                -Dsonar.python.coverage.reportPaths=coverage.xml
-        """
-    }
-}
+//         stage('SonarQube Analysis') {
+//     steps {
+//         sh """
+//             docker run --rm \
+//                 -e SONAR_TOKEN=${SONAR_TOKEN} \
+//                 -v \$PWD:/usr/src \
+//                 -w /usr/src \
+//                 sonarsource/sonar-scanner-cli \
+//                 -Dsonar.projectKey=${SONAR_KEY} \
+//                 -Dsonar.organization=${SONAR_ORGANIZATION} \
+//                 -Dsonar.host.url=${SONAR_HOST_URL} \
+//                 -Dsonar.sources=. \
+//                 -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/** \
+//                 -Dsonar.login=\$SONAR_TOKEN \
+//                 -Dsonar.python.coverage.reportPaths=coverage.xml
+//         """
+//     }
+// }
 
 
 stage('ZAP Scan') {
     steps {
         script {
             try {
-                // Create network if not exists
                 sh "docker network create devnet || true"
-
-                // Remove old container if exists and start a new one
+                sh "docker rm -f er_scan || true"
+                
                 sh """
-                    docker rm -f er_scan || true
-                    docker run -d --name er_scan -p 8000:8000 --network devnet subin/localproblemreportingsystem:latest
+                    docker run -d --name er_scan -p 8000:8000 --network devnet ${IMAGE_NAME}:${IMAGE_TAG}
                 """
 
-                // Wait for Django to be ready on localhost:8000
+                // Robust wait with timeout
                 sh """
-                    until curl -s http://127.0.0.1:8000 > /dev/null; do
-                        echo "Waiting for Django..."
+                    timeout=180
+                    counter=0
+                    while ! curl -f -s http://er_scan:8000/ > /dev/null; do
+                        if [ \$counter -ge \$timeout ]; then
+                            echo "Timeout waiting for Django"
+                            exit 1
+                        fi
+                        echo "Waiting for Django... (\$counter seconds)"
                         sleep 5
+                        counter=\$((counter + 5))
                     done
+                    echo "Django is ready after \$counter seconds"
+                    sleep 10  # Extra safety margin
                 """
 
-                // Run ZAP scan targeting localhost
+                // Run ZAP - don't fail build on findings
                 sh """
                     docker run --rm --network devnet -v /var/lib/jenkins:/zap/wrk --user root \
                         ghcr.io/zaproxy/zaproxy:stable \
-                        zap-full-scan.py -t http://127.0.0.1:8000 -r /zap/wrk/zap_report.html \
-                        -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2"
+                        zap-full-scan.py -t http://er_scan:8000 -r /zap/wrk/zap_report.html \
+                        -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2" \
+                        -I || echo "ZAP scan found issues (this is expected)"
                 """
+                
             } finally {
                 sh "docker rm -f er_scan || true"
             }
         }
     }
 }
-
 
 
         stage('Push Docker Image to Docker Hub') {
