@@ -76,18 +76,24 @@ pipeline {
 }
 
 
-        stage('ZAP Scan') {
+stage('ZAP Scan') {
     steps {
         script {
             try {
                 sh "docker network create devnet || true"
-                sh "docker run -d --name er_scan --network devnet subin/localproblemreportingsystem:latest"
+
+                sh """
+                    docker rm -f er_scan || true
+                    docker run -d --name er_scan --network devnet subin/localproblemreportingsystem:latest
+                """
+
                 sh """
                     until curl -s http://er_scan:8000 > /dev/null; do
                         echo "Waiting for Django..."
                         sleep 5
                     done
                 """
+
                 sh """
                     docker run --rm --network devnet -v /var/lib/jenkins:/zap/wrk --user root \
                         ghcr.io/zaproxy/zaproxy:stable \
@@ -95,8 +101,7 @@ pipeline {
                         -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2"
                 """
             } finally {
-                sh "docker stop er_scan || true"
-                sh "docker rm er_scan || true"
+                sh "docker rm -f er_scan || true"
             }
         }
     }
