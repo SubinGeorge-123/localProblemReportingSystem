@@ -25,17 +25,17 @@ load_dotenv()
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY",'django-insecure-f-z%uc%4-9=^)0ul0+u=v0ahlh)3ni_&der_hky+go#sa4(!xa')
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1","52.91.225.219"]
+ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1"]
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://52.91.225.219:8000',
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
+    'https://52.91.225.219:8000',
+    'https://localhost:8000',
+    'https://127.0.0.1:8000',
 ]
 
 
@@ -158,4 +158,3 @@ if 'test' in sys.argv:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
-    
