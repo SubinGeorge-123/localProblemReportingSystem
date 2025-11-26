@@ -141,8 +141,8 @@ SECURE_SSL_REDIRECT = not ('test' in sys.argv)
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = True    # Only over HTTPS
-CSRF_COOKIE_SECURE = True       # Only over HTTPS
+SESSION_COOKIE_SECURE = False    # Only over HTTPS
+CSRF_COOKIE_SECURE = False       # Only over HTTPS
 
 CSP_DEFAULT_SRC = ("'self'",)
 CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")
