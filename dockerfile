@@ -8,6 +8,9 @@ ENV DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
 ENV DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
  
 WORKDIR /app
+
+# Install curl for health checks and any other tools
+RUN apt-get update && apt-get install -y curl && apt-get clean
  
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
