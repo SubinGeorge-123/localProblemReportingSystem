@@ -144,32 +144,30 @@ stage('Deploy to EC2') {
     steps {
         sshagent(['ec2-key']) {
             withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
+                sh '''
+                    ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
                     set -x
                     docker login -u $DOCKER_USER -p $DOCKER_PASS
-                    docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+                    docker pull subingeorge2000/localproblemreportingsystem:latest
 
-                    # Stop and remove old container
+                    # Stop and remove old container if exists
                     docker rm -f localproblemreportingsystem || true
 
-                    # Run new container with Gunicorn and ALLOWED_HOSTS
+                    # Run new container (uses Dockerfile CMD)
+                    echo "Running: docker run -d -p 8000:8000 --name localproblemreportingsystem"
                     docker run -d -p 8000:8000 --name localproblemreportingsystem \
                         --restart unless-stopped \
                         -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
-                        -e ALLOWED_HOSTS="*" \
-                        ${IMAGE_NAME}:${IMAGE_TAG} \
-                        gunicorn localProblemReportingSystemApp.wsgi:application --bind 0.0.0.0:8000
+                        subingeorge2000/localproblemreportingsystem:latest
 EOF
-                """
+                '''
             }
         }
     }
+    
 }
 
-    }
-
-    post {
+ post {
         failure {
             echo "❌ Build ${BUILD_TAG} failed."
         }
