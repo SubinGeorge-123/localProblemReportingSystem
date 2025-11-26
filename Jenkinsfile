@@ -73,23 +73,25 @@ stage('Generate Coverage') {
     steps {
         script {
             sh """
-                # Create a temporary container to run tests and generate coverage
+                # Remove old file first to avoid permission mismatch
+                rm -f coverage.xml || true
+
+                # Run coverage as the Jenkins user (not root)
                 docker run --rm \
-                    --name coverage_gen \
+                    -u \$(id -u):\$(id -g) \
                     -v \${PWD}:/app \
                     -w /app \
                     python:3.11-slim \
                     bash -c "
                         pip install -r requirements.txt
                         pip install coverage
-                        python manage.py test --noinput
                         coverage run --source='.' manage.py test
-                        coverage xml
-                    " || echo "Tests may have failed but continuing..."
+                        coverage xml -o coverage.xml
+                    "
             """
-            
-            // Verify coverage file was created
-            sh "ls -la coverage.xml || echo 'Creating empty coverage file' && echo '<coverage/>' > coverage.xml"
+
+            # Show final permissions
+            sh "ls -la coverage.xml"
         }
     }
 }
