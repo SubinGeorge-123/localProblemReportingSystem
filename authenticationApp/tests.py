@@ -1,3 +1,4 @@
+import os
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
@@ -6,10 +7,16 @@ from django.contrib.messages import get_messages
 class AuthViewsTest(TestCase):
 
     def setUp(self):
-        # Create a test user
-        self.username = 'testuser'
-        self.password = 'TestPass123'
-        self.user = User.objects.create_user(username=self.username, email='testuser@example.com', password=self.password)
+        # Use environment variables with fallbacks
+        self.username = os.getenv('TEST_USERNAME', 'testuser')
+        self.password = os.getenv('TEST_PASSWORD', 'TestPass123')
+        self.new_user_password = os.getenv('TEST_NEW_PASSWORD', 'StrongPass123!')
+        
+        self.user = User.objects.create_user(
+            username=self.username, 
+            email='testuser@example.com', 
+            password=self.password
+        )
 
     def test_signup_view_get(self):
         response = self.client.get(reverse('signup'))
@@ -20,8 +27,8 @@ class AuthViewsTest(TestCase):
         response = self.client.post(reverse('signup'), {
             'username': 'newuser',
             'email': 'newuser@example.com',
-            'password1': 'StrongPass123!',
-            'password2': 'StrongPass123!',
+            'password1': self.new_user_password,
+            'password2': self.new_user_password,
         })
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse('login'))
