@@ -73,10 +73,9 @@ stage('Generate Coverage') {
     steps {
         script {
             sh """
-                # Remove old file first to avoid permission mismatch
+                # Remove old coverage.xml first
                 rm -f coverage.xml || true
 
-                # Run coverage as the Jenkins user (not root)
                 docker run --rm \
                     -u \$(id -u):\$(id -g) \
                     -v \${PWD}:/app \
@@ -90,11 +89,12 @@ stage('Generate Coverage') {
                     "
             """
 
-            # Show final permissions
+            // Show final permissions (Groovy comment)
             sh "ls -la coverage.xml"
         }
     }
 }
+
 
 stage('SonarQube Analysis') {
     steps {
