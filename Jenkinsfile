@@ -4,6 +4,11 @@ pipeline {
     environment {
         IMAGE_NAME = "subingeorge2000/localproblemreportingsystem"
         IMAGE_TAG = "latest"
+
+        DJANGO_SUPERUSER_USERNAME = credentials('django_superuser_username')
+        DJANGO_SUPERUSER_EMAIL    = credentials('django_superuser_email')
+        DJANGO_SUPERUSER_PASSWORD = credentials('django_superuser_password')
+
         SONAR_HOST_URL = 'https://sonarcloud.io'
         SONAR_TOKEN    = credentials('sonar_token')
         SONAR_KEY      = 'subingeorge-123_localproblemreportingsystem'
@@ -36,20 +41,34 @@ pipeline {
             }
         }
 
-stage('Build Docker Image & Run Tests') {
-    steps {
-        script {
-            // Build the real Docker image
-            sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-
-            // Run tests in the real image (without detached server)
-            sh """
-                docker run --rm -e ALLOWED_HOSTS="*" ${IMAGE_NAME}:${IMAGE_TAG} \
-                sh -c "python manage.py test"
-            """
+        stage('Build Docker Image & Run Tests') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'django_superuser_username', variable: 'DJANGO_SUPERUSER_USERNAME'),
+                        string(credentialsId: 'django_superuser_email', variable: 'DJANGO_SUPERUSER_EMAIL'),
+                        string(credentialsId: 'django_superuser_password', variable: 'DJANGO_SUPERUSER_PASSWORD')
+                    ]) {
+                        try {
+                            sh """
+                                docker build \
+                                --build-arg DJANGO_SUPERUSER_USERNAME=$DJANGO_SUPERUSER_USERNAME \
+                                --build-arg DJANGO_SUPERUSER_EMAIL=$DJANGO_SUPERUSER_EMAIL \
+                                --build-arg DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD \
+                                -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                            """
+                            sh "docker run -d --name test_container -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
+                            sh "docker exec test_container python3 manage.py test"
+                        } finally {
+                            sh """
+                                docker stop test_container || true
+                                docker rm test_container || true
+                            """
+                        }
+                    }
+                }
+            }
         }
-    }
-}
 
 stage('SonarQube Analysis') {
     steps {
@@ -127,7 +146,7 @@ stage('SonarQube Analysis') {
     }
 }
 
-      
+
         stage('Push Docker Image to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -137,38 +156,37 @@ stage('SonarQube Analysis') {
             }
         }
 
-stage('Deploy to EC2') {
-    when {
-        expression { params.DEPLOY_EC2 }
-    }
-    steps {
-        sshagent(['ec2-key']) {
-            withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                sh '''
-                    ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
-                    set -x
-                    docker login -u $DOCKER_USER -p $DOCKER_PASS
-                    docker pull subingeorge2000/localproblemreportingsystem:latest
-
-                    # Stop and remove old container if exists
-                    docker rm -f localproblemreportingsystem || true
-
-                    # Run new container (uses Dockerfile CMD)
-                    echo "Running: docker run -d -p 8000:8000 --name localproblemreportingsystem"
-                    docker run -d -p 8000:8000 --name localproblemreportingsystem \
-                        --restart unless-stopped \
-                        -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
-                        subingeorge2000/localproblemreportingsystem:latest
-EOF
-                '''
+        stage('Deploy to EC2') {
+            when {
+                expression { params.DEPLOY_EC2 }
             }
+            steps {
+                sshagent(['ec2-key']) {
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh '''
+                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
+                            set -x
+                            docker login -u $DOCKER_USER -p $DOCKER_PASS
+                            docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+
+                            # Stop old container
+                            docker rm -f localproblemreportingsystem || true
+
+                            # Run new container with persistent DB
+                            docker run -d -p 8000:8000 --name localproblemreportingsystem \
+                                --restart unless-stopped \
+                                -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
+                                ${IMAGE_NAME}:${IMAGE_TAG}
+EOF
+                        '''
+                    }
+                }
+            }
+            
         }
     }
-    
-}
-    }
 
- post {
+    post {
         failure {
             echo "❌ Build ${BUILD_TAG} failed."
         }
