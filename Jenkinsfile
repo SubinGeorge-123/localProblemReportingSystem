@@ -159,7 +159,7 @@ stage('Deploy to EC2') {
                         -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
                         -e ALLOWED_HOSTS="*" \
                         ${IMAGE_NAME}:${IMAGE_TAG} \
-                        gunicorn localProblemReportingSystem.wsgi:application --bind 0.0.0.0:8000
+                        gunicorn localProblemReportingSystemApp.wsgi:application --bind 0.0.0.0:8000
 EOF
                 """
             }
