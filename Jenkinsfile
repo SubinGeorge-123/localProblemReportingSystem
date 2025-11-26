@@ -36,25 +36,21 @@ pipeline {
             }
         }
 
-         stage('Build Docker Image & Run Tests') {
-            steps {
-                script {
-                    try {
-                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+stage('Build Docker Image & Run Tests') {
+    steps {
+        script {
+            // Build the real Docker image
+            sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
 
-                        // Run test container (use a deterministic name and map host port 8000 temporarily for tests if needed)
-                        sh "docker run -d --name localProblemReportingSystem_test -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
-                        sh "docker exec localProblemReportingSystem_test python3 manage.py test"
-                    } finally {
-                        // ensure cleanup
-                        sh """
-                            docker stop localProblemReportingSystem_test || true
-                            docker rm localProblemReportingSystem_test || true
-                        """
-                    }
-                }
-            }
+            // Run tests in the real image (without detached server)
+            sh """
+                docker run --rm -e ALLOWED_HOSTS="*" ${IMAGE_NAME}:${IMAGE_TAG} \
+                sh -c "python manage.py test"
+            """
         }
+    }
+}
+
 stage('SonarQube Analysis') {
     steps {
         script {
