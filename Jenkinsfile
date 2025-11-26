@@ -141,30 +141,36 @@ stage('SonarQube Analysis') {
             }
         }
 
-        stage('Deploy to EC2') {
-            when {
-                expression { params.DEPLOY_EC2 }
-            }
-            steps {
-                sshagent(['ec2-key']) {
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
-                            set -x
-                            docker login -u $DOCKER_USER -p $DOCKER_PASS
-                            docker pull subingeorge2000/localproblemreportingsystem:latest
-                            docker rm -f localproblemreportingsystem || true
+stage('Deploy to EC2') {
+    when {
+        expression { params.DEPLOY_EC2 }
+    }
+    steps {
+        sshagent(['ec2-key']) {
+            withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                sh """
+                    ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
+                    set -x
+                    docker login -u $DOCKER_USER -p $DOCKER_PASS
+                    docker pull ${IMAGE_NAME}:${IMAGE_TAG}
 
-                            docker run -d -p 8000:8000 --name localproblemreportingsystem \
-                                --restart unless-stopped \
-                                -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
-                                subingeorge2000/localproblemreportingsystem:latest
+                    # Stop and remove old container
+                    docker rm -f localproblemreportingsystem || true
+
+                    # Run new container with Gunicorn and ALLOWED_HOSTS
+                    docker run -d -p 8000:8000 --name localproblemreportingsystem \
+                        --restart unless-stopped \
+                        -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
+                        -e ALLOWED_HOSTS="*" \
+                        ${IMAGE_NAME}:${IMAGE_TAG} \
+                        gunicorn localProblemReportingSystem.wsgi:application --bind 0.0.0.0:8000
 EOF
-                        """
-                    }
-                }
+                """
             }
         }
+    }
+}
+
     }
 
     post {
