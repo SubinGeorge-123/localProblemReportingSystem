@@ -73,15 +73,14 @@ stage('Generate Coverage') {
     steps {
         script {
             sh """
-                # Remove old coverage.xml first
+                # Remove old coverage.xml
                 rm -f coverage.xml || true
 
                 docker run --rm \
-                    -u \$(id -u):\$(id -g) \
                     -v \${PWD}:/app \
                     -w /app \
-                    python:3.11-slim \
-                    bash -c "
+                    python:3.11-slim bash -c "
+                        pip install --upgrade pip
                         pip install -r requirements.txt
                         pip install coverage
                         coverage run --source='.' manage.py test
@@ -89,7 +88,7 @@ stage('Generate Coverage') {
                     "
             """
 
-            // Show final permissions (Groovy comment)
+            // show file to confirm
             sh "ls -la coverage.xml"
         }
     }
