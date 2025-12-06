@@ -53,19 +53,14 @@ stage('Build Docker Image & Run Tests') {
             ]) {
                 try {
                     sh """
-                        docker build \
-                        --build-arg DJANGO_SUPERUSER_USERNAME=$DJANGO_SUPERUSER_USERNAME \
-                        --build-arg DJANGO_SUPERUSER_EMAIL=$DJANGO_SUPERUSER_EMAIL \
-                        --build-arg DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD \
-                        -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                        docker build \\
+                            --build-arg DJANGO_SUPERUSER_USERNAME='${DJANGO_SUPERUSER_USERNAME}' \\
+                            --build-arg DJANGO_SUPERUSER_EMAIL='${DJANGO_SUPERUSER_EMAIL}' \\
+                            --build-arg DJANGO_SUPERUSER_PASSWORD='${DJANGO_SUPERUSER_PASSWORD}' \\
+                            --build-arg DJANGO_SECRET_KEY='${DJANGO_SECRET_KEY}' \\
+                            -t ${IMAGE_NAME}:${IMAGE_TAG} .
                     """
-                    sh """
-                        docker run -d \
-                            --name test_container \
-                            -p 8000:8000 \
-                            -e DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY \
-                            ${IMAGE_NAME}:${IMAGE_TAG}
-                    """
+                    sh "docker run -d --name test_container -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
                     sh "docker exec test_container python3 manage.py test"
                 } finally {
                     sh """
