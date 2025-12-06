@@ -5,6 +5,7 @@ pipeline {
         IMAGE_NAME = "subingeorge2000/localproblemreportingsystem"
         IMAGE_TAG = "latest"
 
+        DJANGO_SECRET_KEY        = credentials('DJANGO_SECRET_KEY')
         DJANGO_SUPERUSER_USERNAME = credentials('django_superuser_username')
         DJANGO_SUPERUSER_EMAIL    = credentials('django_superuser_email')
         DJANGO_SUPERUSER_PASSWORD = credentials('django_superuser_password')
@@ -41,34 +42,41 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image & Run Tests') {
-            steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'django_superuser_username', variable: 'DJANGO_SUPERUSER_USERNAME'),
-                        string(credentialsId: 'django_superuser_email', variable: 'DJANGO_SUPERUSER_EMAIL'),
-                        string(credentialsId: 'django_superuser_password', variable: 'DJANGO_SUPERUSER_PASSWORD')
-                    ]) {
-                        try {
-                            sh """
-                                docker build \
-                                --build-arg DJANGO_SUPERUSER_USERNAME=$DJANGO_SUPERUSER_USERNAME \
-                                --build-arg DJANGO_SUPERUSER_EMAIL=$DJANGO_SUPERUSER_EMAIL \
-                                --build-arg DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD \
-                                -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                            """
-                            sh "docker run -d --name test_container -p 8000:8000 ${IMAGE_NAME}:${IMAGE_TAG}"
-                            sh "docker exec test_container python3 manage.py test"
-                        } finally {
-                            sh """
-                                docker stop test_container || true
-                                docker rm test_container || true
-                            """
-                        }
-                    }
+stage('Build Docker Image & Run Tests') {
+    steps {
+        script {
+            withCredentials([
+                string(credentialsId: 'django_superuser_username', variable: 'DJANGO_SUPERUSER_USERNAME'),
+                string(credentialsId: 'django_superuser_email', variable: 'DJANGO_SUPERUSER_EMAIL'),
+                string(credentialsId: 'django_superuser_password', variable: 'DJANGO_SUPERUSER_PASSWORD'),
+                string(credentialsId: 'DJANGO_SECRET_KEY', variable: 'DJANGO_SECRET_KEY')
+            ]) {
+                try {
+                    sh """
+                        docker build \
+                        --build-arg DJANGO_SUPERUSER_USERNAME=$DJANGO_SUPERUSER_USERNAME \
+                        --build-arg DJANGO_SUPERUSER_EMAIL=$DJANGO_SUPERUSER_EMAIL \
+                        --build-arg DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD \
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    """
+                    sh """
+                        docker run -d \
+                            --name test_container \
+                            -p 8000:8000 \
+                            -e DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY \
+                            ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+                    sh "docker exec test_container python3 manage.py test"
+                } finally {
+                    sh """
+                        docker stop test_container || true
+                        docker rm test_container || true
+                    """
                 }
             }
         }
+    }
+}
 stage('Generate Coverage') {
     steps {
         script {
