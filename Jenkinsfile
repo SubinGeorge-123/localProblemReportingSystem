@@ -200,7 +200,7 @@ stage('Deploy to EC2') {
                 string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
             ]) {
                 sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@\${EC2_IP} << EOF
+                    ssh -o StrictHostKeyChecking=no ubuntu@\${EC2_IP} /bin/bash << 'REMOTE_EOF'
                     set -x
                     
                     # Login to Docker Hub
@@ -231,7 +231,7 @@ stage('Deploy to EC2') {
                     sleep 10
                     docker ps | grep localproblemreportingsystem
                     echo "Deployment completed!"
-                    EOF
+                    REMOTE_EOF
                 """
             }
         }
