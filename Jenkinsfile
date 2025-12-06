@@ -5,11 +5,6 @@ pipeline {
         IMAGE_NAME = "subingeorge2000/localproblemreportingsystem"
         IMAGE_TAG = "latest"
 
-        DJANGO_SUPERUSER_USERNAME = credentials('django_superuser_username')
-        DJANGO_SUPERUSER_EMAIL    = credentials('django_superuser_email')
-        DJANGO_SUPERUSER_PASSWORD = credentials('django_superuser_password')
-        DJANGO_SECRET_KEY = credentials('django_secret_key')
-
         SONAR_HOST_URL = 'https://sonarcloud.io'
         SONAR_TOKEN    = credentials('sonar_token')
         SONAR_KEY      = 'subingeorge-123_localproblemreportingsystem'
@@ -46,29 +41,33 @@ pipeline {
             steps {
                 script {
                     withCredentials([
-                        string(credentialsId: 'django_secret_key', variable: 'DJANGO_SECRET_KEY'),
-                        string(credentialsId: 'django_superuser_username', variable: 'DJANGO_SUPERUSER_USERNAME'),
-                        string(credentialsId: 'django_superuser_email', variable: 'DJANGO_SUPERUSER_EMAIL'),
-                        string(credentialsId: 'django_superuser_password', variable: 'DJANGO_SUPERUSER_PASSWORD')
+                        string(credentialsId: 'django_secret_key', variable: 'SECRET_KEY'),
+                        string(credentialsId: 'django_superuser_username', variable: 'SUPERUSER_NAME'),
+                        string(credentialsId: 'django_superuser_email', variable: 'SUPERUSER_EMAIL'),
+                        string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
                     ]) {
                         try {
                             sh """
-                                docker build \
-                                --build-arg DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY \
-                                --build-arg DJANGO_SUPERUSER_USERNAME=$DJANGO_SUPERUSER_USERNAME \
-                                --build-arg DJANGO_SUPERUSER_EMAIL=$DJANGO_SUPERUSER_EMAIL \
-                                --build-arg DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD \
-                                -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                                docker build \\
+                                    --build-arg DJANGO_SECRET_KEY=\${SECRET_KEY} \\
+                                    --build-arg DJANGO_SUPERUSER_USERNAME=\${SUPERUSER_NAME} \\
+                                    --build-arg DJANGO_SUPERUSER_EMAIL=\${SUPERUSER_EMAIL} \\
+                                    --build-arg DJANGO_SUPERUSER_PASSWORD=\${SUPERUSER_PASS} \\
+                                    -t \${IMAGE_NAME}:\${IMAGE_TAG} .
                             """
-                             sh """
-                                docker run -d \
-                                    --name test_container \
-                                    -e DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY \
-                                    -e DEBUG=True \
-                                    -p 8000:8000 \
-                                    ${IMAGE_NAME}:${IMAGE_TAG}
+                            sh """
+                                docker run -d \\
+                                    --name test_container \\
+                                    -e DJANGO_SECRET_KEY=\${SECRET_KEY} \\
+                                    -e DEBUG=True \\
+                                    -p 8000:8000 \\
+                                    \${IMAGE_NAME}:\${IMAGE_TAG}
                             """
-                            sh "docker exec test_container python3 manage.py test"
+                            sh """
+                                # Wait a moment for Django to start
+                                sleep 5
+                                docker exec test_container python3 manage.py test
+                            """
                         } finally {
                             sh """
                                 docker stop test_container || true
@@ -79,10 +78,11 @@ pipeline {
                 }
             }
         }
-stage('Generate Coverage') {
-    steps {
-        script {
-            sh """
+
+        stage('Generate Coverage') {
+            steps {
+                script {
+                   sh """
                 # Remove old coverage.xml
                 rm -f coverage.xml || true
 
@@ -100,16 +100,15 @@ stage('Generate Coverage') {
 
             // show file to confirm
             sh "ls -la coverage.xml"
+                }
+            }
         }
-    }
-}
 
-
-stage('SonarQube Analysis') {
-    steps {
-        script {
-            retry(2) { // retry up to 2 times
-                sh """
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    retry(2) {
+                      sh """
                     docker run --rm \
                         -e SONAR_TOKEN=${SONAR_TOKEN} \
                         -v \$PWD:/usr/src \
@@ -123,24 +122,21 @@ stage('SonarQube Analysis') {
                         -Dsonar.login=\$SONAR_TOKEN \
                         -Dsonar.python.coverage.reportPaths=coverage.xml
                 """
+                    }
+                }
             }
         }
-    }
-}
 
-
-        stage('ZAP Scan') {
+      stage('ZAP Scan') {
             steps {
                 script {
                     try {
                         withCredentials([
                             string(credentialsId: 'django_secret_key', variable: 'SECRET_KEY')
                         ]) {
-                            // create network and cleanup any prior leftover container
                             sh "docker network create devnet || true"
                             sh "docker rm -f er_scan || true"
 
-                            // Run the app container for scanning with --noreload
                             sh """
                                 docker run -d --name er_scan --network devnet \\
                                     -e DJANGO_SECRET_KEY=\${SECRET_KEY} \\
@@ -149,55 +145,48 @@ stage('SonarQube Analysis') {
                                     \${IMAGE_NAME}:\${IMAGE_TAG} sh -c "python manage.py runserver 0.0.0.0:8000 --noreload"
                             """
 
-                            // Wait for Django to become healthy by curling localhost inside the container
                             sh """
-                                timeout=180
-                                counter=0
-                                while ! docker exec er_scan sh -c 'curl -f -s http://localhost:8000/ >/dev/null'; do
-                                    if [ \\\$counter -ge \\\$timeout ]; then
-                                        echo "Timeout waiting for Django (after \\\$counter seconds)"
-                                        echo "=== er_scan logs ==="
-                                        docker logs er_scan || true
-                                        echo "=== end logs ==="
+                                timeout=60
+                                count=0
+                                while ! docker exec er_scan curl -s http://localhost:8000/ >/dev/null 2>&1; do
+                                    if [ \$count -ge \$timeout ]; then
+                                        echo "Django failed to start"
+                                        docker logs er_scan
                                         exit 1
                                     fi
-                                    echo "Waiting for Django... (\\\$counter seconds)"
+                                    echo "Waiting for Django... (\$count seconds)"
                                     sleep 5
-                                    counter=\\\$((counter + 5))
+                                    count=\$((count + 5))
                                 done
-                                echo "Django is ready after \\\$counter seconds"
-                                sleep 5
+                                echo "Django is ready"
                             """
 
-                            // Run ZAP scan
                             sh """
                                 docker run --rm --network devnet \\
                                     -v /var/lib/jenkins:/zap/wrk --user root \\
                                     ghcr.io/zaproxy/zaproxy:stable \\
                                     zap-full-scan.py -t http://er_scan:8000 -r /zap/wrk/zap_report.html \\
-                                    -m 1 -T 2 -z "-config api.disablekey=true -config scanner.threadPerHost=2" \\
-                                    -I || echo "ZAP scan found issues (this is expected)"
+                                    -m 1 -T 2 -z "-config api.disablekey=true" \\
+                                    -I || echo "ZAP scan completed"
                             """
                         }
                     } finally {
-                        // Remove the scan app container
                         sh "docker rm -f er_scan || true"
                     }
                 }
             }
         }
 
-
         stage('Push Docker Image to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker push \${IMAGE_NAME}:\${IMAGE_TAG}"
                 }
             }
         }
 
- stage('Deploy to EC2') {
+        stage('Deploy to EC2') {
             when {
                 expression { params.DEPLOY_EC2 }
             }
@@ -206,9 +195,9 @@ stage('SonarQube Analysis') {
                     withCredentials([
                         usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
                         string(credentialsId: 'django_secret_key', variable: 'SECRET_KEY'),
-                        string(credentialsId: 'django_superuser_username', variable: 'SUPERUSER_USERNAME'),
+                        string(credentialsId: 'django_superuser_username', variable: 'SUPERUSER_NAME'),
                         string(credentialsId: 'django_superuser_email', variable: 'SUPERUSER_EMAIL'),
-                        string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASSWORD')
+                        string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
                     ]) {
                         sh '''
                             ssh -o StrictHostKeyChecking=no ubuntu@${EC2_IP} << 'EOF'
@@ -216,25 +205,20 @@ stage('SonarQube Analysis') {
                             docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
                             docker pull ${IMAGE_NAME}:${IMAGE_TAG}
 
-                            # Stop old container
                             docker rm -f localproblemreportingsystem || true
-
-                            # Create directory for persistent data
                             mkdir -p /home/ubuntu/er_data
 
-                            # Run new container with environment variables
                             docker run -d -p 8000:8000 --name localproblemreportingsystem \\
                                 --restart unless-stopped \\
                                 -e DJANGO_SECRET_KEY="${SECRET_KEY}" \\
-                                -e DJANGO_SUPERUSER_USERNAME="${SUPERUSER_USERNAME}" \\
+                                -e DJANGO_SUPERUSER_USERNAME="${SUPERUSER_NAME}" \\
                                 -e DJANGO_SUPERUSER_EMAIL="${SUPERUSER_EMAIL}" \\
-                                -e DJANGO_SUPERUSER_PASSWORD="${SUPERUSER_PASSWORD}" \\
+                                -e DJANGO_SUPERUSER_PASSWORD="${SUPERUSER_PASS}" \\
                                 -e DEBUG=False \\
                                 -e ALLOWED_HOSTS="*" \\
                                 -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
                                 ${IMAGE_NAME}:${IMAGE_TAG}
-                            
-                            # Check if container is running
+
                             sleep 10
                             docker ps | grep localproblemreportingsystem
                             echo "Deployment completed!"

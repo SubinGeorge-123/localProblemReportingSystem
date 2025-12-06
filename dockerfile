@@ -13,7 +13,6 @@ ENV DEBUG="True"
  
 WORKDIR /app
 
-# Install curl for health checks and any other tools
 RUN apt-get update && apt-get install -y curl && apt-get clean
  
 COPY requirements.txt .
