@@ -87,7 +87,7 @@ pipeline {
                 rm -f coverage.xml || true
 
                 docker run --rm \
-                    -v \${PWD}:/app \
+                  -v \${PWD}:/app \
                     -w /app \
                     python:3.11-slim bash -c "
                         pip install --upgrade pip
@@ -186,48 +186,57 @@ pipeline {
             }
         }
 
-        stage('Deploy to EC2') {
-            when {
-                expression { params.DEPLOY_EC2 }
-            }
-            steps {
-                sshagent(['ec2-key']) {
-                    withCredentials([
-                        usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
-                        string(credentialsId: 'django_secret_key', variable: 'SECRET_KEY'),
-                        string(credentialsId: 'django_superuser_username', variable: 'SUPERUSER_NAME'),
-                        string(credentialsId: 'django_superuser_email', variable: 'SUPERUSER_EMAIL'),
-                        string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
-                    ]) {
-                        sh '''
-                            ssh -o StrictHostKeyChecking=no ubuntu@${EC2_IP} << 'EOF'
-                            set -x
-                            docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
-                            docker pull ${IMAGE_NAME}:${IMAGE_TAG}
-
-                            docker rm -f localproblemreportingsystem || true
-                            mkdir -p /home/ubuntu/er_data
-
-                            docker run -d -p 8000:8000 --name localproblemreportingsystem \\
-                                --restart unless-stopped \\
-                                -e DJANGO_SECRET_KEY="${SECRET_KEY}" \\
-                                -e DJANGO_SUPERUSER_USERNAME="${SUPERUSER_NAME}" \\
-                                -e DJANGO_SUPERUSER_EMAIL="${SUPERUSER_EMAIL}" \\
-                                -e DJANGO_SUPERUSER_PASSWORD="${SUPERUSER_PASS}" \\
-                                -e DEBUG=False \\
-                                -e ALLOWED_HOSTS="*" \\
-                                -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
-                                ${IMAGE_NAME}:${IMAGE_TAG}
-
-                            sleep 10
-                            docker ps | grep localproblemreportingsystem
-                            echo "Deployment completed!"
-                            EOF
-                        ''' 
-                    }
-                }
+stage('Deploy to EC2') {
+    when {
+        expression { params.DEPLOY_EC2 }
+    }
+    steps {
+        sshagent(['ec2-key']) {
+            withCredentials([
+                usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
+                string(credentialsId: 'django_secret_key', variable: 'SECRET_KEY'),
+                string(credentialsId: 'django_superuser_username', variable: 'SUPERUSER_NAME'),
+                string(credentialsId: 'django_superuser_email', variable: 'SUPERUSER_EMAIL'),
+                string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
+            ]) {
+                sh """
+                    ssh -o StrictHostKeyChecking=no ubuntu@\${EC2_IP} << EOF
+                    set -x
+                    
+                    # Login to Docker Hub
+                    echo "\${DOCKER_PASS}" | docker login -u "\${DOCKER_USER}" --password-stdin
+                    
+                    # Pull the image
+                    docker pull \${IMAGE_NAME}:\${IMAGE_TAG}
+                    
+                    # Stop old container
+                    docker rm -f localproblemreportingsystem || true
+                    
+                    # Create directory for persistent data
+                    mkdir -p /home/ubuntu/er_data
+                    
+                    # Run new container with environment variables
+                    docker run -d -p 8000:8000 --name localproblemreportingsystem \\
+                        --restart unless-stopped \\
+                        -e DJANGO_SECRET_KEY="\${SECRET_KEY}" \\
+                        -e DJANGO_SUPERUSER_USERNAME="\${SUPERUSER_NAME}" \\
+                        -e DJANGO_SUPERUSER_EMAIL="\${SUPERUSER_EMAIL}" \\
+                        -e DJANGO_SUPERUSER_PASSWORD="\${SUPERUSER_PASS}" \\
+                        -e DEBUG=False \\
+                        -e ALLOWED_HOSTS="*" \\
+                        -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
+                        \${IMAGE_NAME}:\${IMAGE_TAG}
+                    
+                    # Check if container is running
+                    sleep 10
+                    docker ps | grep localproblemreportingsystem
+                    echo "Deployment completed!"
+                    EOF
+                """
             }
         }
+    }
+}
     }
 
     post {
