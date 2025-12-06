@@ -186,79 +186,31 @@ pipeline {
             }
         }
 
-stage('Deploy to EC2') {
-    steps {
-        sshagent(['ec2-key']) {
-            withCredentials([
-                usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
-                string(credentialsId: 'django_secret_key', variable: 'SECRET_KEY'),
-                string(credentialsId: 'django_superuser_username', variable: 'SUPERUSER_NAME'),
-                string(credentialsId: 'django_superuser_email', variable: 'SUPERUSER_EMAIL'),
-                string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
-            ]) {
-                script {
-                    writeFile file: 'deploy.sh', text: """#!/bin/bash
-                        set -x
-                        
-                        # Force logout and login to ensure fresh credentials
-                        docker logout
-                        echo '${DOCKER_PASS}' | docker login -u '${DOCKER_USER}' --password-stdin
-                        
-                        # ALWAYS pull latest image (force pull)
-                        docker pull ${IMAGE_NAME}:${IMAGE_TAG} --force
-                        
-                        # Stop and remove ALL containers (force)
-                        docker stop localproblemreportingsystem || true
-                        docker rm -f localproblemreportingsystem || true
-                        
-                        # Remove old image to force fresh pull
-                        docker rmi ${IMAGE_NAME}:${IMAGE_TAG} 2>/dev/null || true
-                        
-                        # Create directory for persistent data
-                        mkdir -p /home/ubuntu/er_data
-                        
-                        # Run migrations before starting (optional)
-                        docker run --rm -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
-                            -e DJANGO_SECRET_KEY='${SECRET_KEY}' \\
-                            -e DEBUG=False \\
-                            ${IMAGE_NAME}:${IMAGE_TAG} python manage.py migrate --noinput || true
-                        
-                        # Run new container with environment variables
-                        docker run -d -p 8000:8000 --name localproblemreportingsystem \\
-                            --restart unless-stopped \\
-                            -e DJANGO_SECRET_KEY='${SECRET_KEY}' \\
-                            -e DJANGO_SUPERUSER_USERNAME='${SUPERUSER_NAME}' \\
-                            -e DJANGO_SUPERUSER_EMAIL='${SUPERUSER_EMAIL}' \\
-                            -e DJANGO_SUPERUSER_PASSWORD='${SUPERUSER_PASS}' \\
-                            -e DEBUG=False \\
-                            -e ALLOWED_HOSTS='*' \\
-                            -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
-                            ${IMAGE_NAME}:${IMAGE_TAG}
-                        
-                        # Wait and verify
-                        sleep 15
-                        echo "=== Checking container status ==="
-                        docker ps | grep localproblemreportingsystem
-                        
-                        echo "=== Checking container logs ==="
-                        docker logs --tail 20 localproblemreportingsystem || true
-                        
-                        echo "=== Checking application health ==="
-                        timeout 30 bash -c 'until curl -s http://localhost:8000/ >/dev/null; do sleep 2; done' || true
-                        
-                        echo "Deployment completed!"
-                    """
-                    
-                    sh """
-                        chmod +x deploy.sh
-                        scp -o StrictHostKeyChecking=no deploy.sh ubuntu@\${EC2_IP}:/tmp/deploy.sh
-                        ssh -o StrictHostKeyChecking=no ubuntu@\${EC2_IP} "bash /tmp/deploy.sh"
-                    """
+ stage('Deploy to EC2') {
+            when {
+                expression { params.DEPLOY_EC2 }
+            }
+            steps {
+                sshagent(['ec2-key']) {
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh '''
+                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
+                            set -x
+                            docker login -u $DOCKER_USER -p $DOCKER_PASS
+                            docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+                            # Stop old container
+                            docker rm -f localproblemreportingsystem || true
+                            # Run new container with persistent DB
+                            docker run -d -p 8000:8000 --name localproblemreportingsystem \
+                                --restart unless-stopped \
+                                -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \
+                                ${IMAGE_NAME}:${IMAGE_TAG}
+EOF
+                        '''
+                    }
                 }
             }
         }
-    }
-}
     }
 
     post {
