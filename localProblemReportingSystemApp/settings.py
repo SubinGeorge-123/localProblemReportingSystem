@@ -15,29 +15,22 @@ import os
 from pathlib import Path
 import sys
 from dotenv import load_dotenv
+from django.core.management.utils import get_random_secret_key
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv()
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
-if not SECRET_KEY:
-    # Only generate for development when explicitly in development mode
-    if os.getenv("DEBUG", "False").lower() == "true":
-        from django.core.management.utils import get_random_secret_key
-        SECRET_KEY = get_random_secret_key()
-        print("Warning: Using auto-generated SECRET_KEY for development. "
-              "Set DJANGO_SECRET_KEY environment variable for production.")
-    else:
-        raise ValueError(
-            "DJANGO_SECRET_KEY environment variable is not set. "
-            "This is required for production deployment."
-        )
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv("django_secret_key")
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+DEBUG = False
 
 ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1"]
 
