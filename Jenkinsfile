@@ -199,40 +199,47 @@ stage('Deploy to EC2') {
                 string(credentialsId: 'django_superuser_email', variable: 'SUPERUSER_EMAIL'),
                 string(credentialsId: 'django_superuser_password', variable: 'SUPERUSER_PASS')
             ]) {
-                sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@\${EC2_IP} /bin/bash << 'REMOTE_EOF'
-                    set -x
+                script {
+                    // Write deployment script
+                    writeFile file: 'deploy.sh', text: """#!/bin/bash
+                        set -x
+                        
+                        # Login to Docker Hub
+                        echo '${DOCKER_PASS}' | docker login -u '${DOCKER_USER}' --password-stdin
+                        
+                        # Pull the image
+                        docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+                        
+                        # Stop old container
+                        docker rm -f localproblemreportingsystem || true
+                        
+                        # Create directory for persistent data
+                        mkdir -p /home/ubuntu/er_data
+                        
+                        # Run new container with environment variables
+                        docker run -d -p 8000:8000 --name localproblemreportingsystem \\
+                            --restart unless-stopped \\
+                            -e DJANGO_SECRET_KEY='${SECRET_KEY}' \\
+                            -e DJANGO_SUPERUSER_USERNAME='${SUPERUSER_NAME}' \\
+                            -e DJANGO_SUPERUSER_EMAIL='${SUPERUSER_EMAIL}' \\
+                            -e DJANGO_SUPERUSER_PASSWORD='${SUPERUSER_PASS}' \\
+                            -e DEBUG=False \\
+                            -e ALLOWED_HOSTS='*' \\
+                            -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
+                            ${IMAGE_NAME}:${IMAGE_TAG}
+                        
+                        # Check if container is running
+                        sleep 10
+                        docker ps | grep localproblemreportingsystem
+                        echo "Deployment completed!"
+                    """
                     
-                    # Login to Docker Hub
-                    echo "\${DOCKER_PASS}" | docker login -u "\${DOCKER_USER}" --password-stdin
-                    
-                    # Pull the image
-                    docker pull \${IMAGE_NAME}:\${IMAGE_TAG}
-                    
-                    # Stop old container
-                    docker rm -f localproblemreportingsystem || true
-                    
-                    # Create directory for persistent data
-                    mkdir -p /home/ubuntu/er_data
-                    
-                    # Run new container with environment variables
-                    docker run -d -p 8000:8000 --name localproblemreportingsystem \\
-                        --restart unless-stopped \\
-                        -e DJANGO_SECRET_KEY="\${SECRET_KEY}" \\
-                        -e DJANGO_SUPERUSER_USERNAME="\${SUPERUSER_NAME}" \\
-                        -e DJANGO_SUPERUSER_EMAIL="\${SUPERUSER_EMAIL}" \\
-                        -e DJANGO_SUPERUSER_PASSWORD="\${SUPERUSER_PASS}" \\
-                        -e DEBUG=False \\
-                        -e ALLOWED_HOSTS="*" \\
-                        -v /home/ubuntu/er_data/db.sqlite3:/app/db.sqlite3 \\
-                        \${IMAGE_NAME}:\${IMAGE_TAG}
-                    
-                    # Check if container is running
-                    sleep 10
-                    docker ps | grep localproblemreportingsystem
-                    echo "Deployment completed!"
-                    REMOTE_EOF
-                """
+                    sh """
+                        chmod +x deploy.sh
+                        scp -o StrictHostKeyChecking=no deploy.sh ubuntu@\${EC2_IP}:/tmp/deploy.sh
+                        ssh -o StrictHostKeyChecking=no ubuntu@\${EC2_IP} "bash /tmp/deploy.sh"
+                    """
+                }
             }
         }
     }
