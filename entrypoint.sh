@@ -2,9 +2,22 @@
 set -e
 
 echo "Starting Django setup..."
+
+# Check if required environment variables are set
+if [ -z "$DJANGO_SECRET_KEY" ]; then
+    echo "ERROR: DJANGO_SECRET_KEY is not set!"
+    echo "For development, you can set a temporary key:"
+    echo "  export DJANGO_SECRET_KEY='django-insecure-test-key-123'"
+    exit 1
+fi
+
+echo "Running migrations..."
 python manage.py migrate --noinput
 
-python manage.py shell <<END
+# Create superuser if all credentials are provided
+if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_EMAIL" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
+    echo "Creating superuser..."
+    python manage.py shell <<END
 import os
 from django.contrib.auth import get_user_model
 
@@ -19,6 +32,10 @@ if not User.objects.filter(username=username).exists():
 else:
     print(f"Super user '{username}' already exists.")
 END
+else
+    echo "Superuser credentials not provided, skipping superuser creation."
+fi
 
+echo "Starting Django server..."
 # ADD --insecure flag to disable HTTPS requirements
 exec python manage.py runserver 0.0.0.0:8000 --insecure
