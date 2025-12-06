@@ -108,21 +108,22 @@ pipeline {
             steps {
                 script {
                     retry(2) {
-                      sh """
-                    docker run --rm \
-                        -e SONAR_TOKEN=${SONAR_TOKEN} \
-                        -v \$PWD:/usr/src \
-                        -w /usr/src \
-                        sonarsource/sonar-scanner-cli:latest \
-                        -Dsonar.projectKey=${SONAR_KEY} \
-                        -Dsonar.organization=${SONAR_ORGANIZATION} \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.sources=. \
-                        -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/**,**/*.sh \
-                        -Dsonar.security.hotspot.exclusions=**/*.sh
-                        -Dsonar.login=\$SONAR_TOKEN \
-                        -Dsonar.python.coverage.reportPaths=coverage.xml
-                """
+                     sh """
+docker run --rm \
+    -e SONAR_TOKEN=${SONAR_TOKEN} \
+    -v \$PWD:/usr/src \
+    -w /usr/src \
+    sonarsource/sonar-scanner-cli:latest \
+    -Dsonar.projectKey=${SONAR_KEY} \
+    -Dsonar.organization=${SONAR_ORGANIZATION} \
+    -Dsonar.host.url=${SONAR_HOST_URL} \
+    -Dsonar.sources=. \
+    -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/**,**/*.sh \
+    -Dsonar.security.hotspot.exclusions=**/*.sh \
+    -Dsonar.login=${SONAR_TOKEN} \
+    -Dsonar.python.coverage.reportPaths=coverage.xml
+"""
+
                     }
                 }
             }
