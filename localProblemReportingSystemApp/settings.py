@@ -16,18 +16,16 @@ from pathlib import Path
 import sys
 from dotenv import load_dotenv
 from django.core.management.utils import get_random_secret_key
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 from django.core.management.utils import get_random_secret_key
 load_dotenv()
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Try multiple environment variable names
+
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', get_random_secret_key())
 
 if not SECRET_KEY:
-    # Only generate for development when explicitly in development mode
     if os.getenv("DEBUG", "False").lower() == "true":
         from django.core.management.utils import get_random_secret_key
         SECRET_KEY = get_random_secret_key()
@@ -38,7 +36,6 @@ if not SECRET_KEY:
             "This is required for production deployment."
         )
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1"]
@@ -49,7 +46,6 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -154,15 +150,6 @@ X_FRAME_OPTIONS = 'DENY'
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 
-# Remove these for now (they might be causing issues)
-# CSP_DEFAULT_SRC = ("'self'",)
-# CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")
-# CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
-# CSP_IMG_SRC = ("'self'", "data:")
-# SECURE_REFERRER_POLICY = 'no-referrer'
-# SECURE_CONTENT_SECURITY_POLICY = {
-#     'permissions-policy': "geolocation=(self), microphone=()"
-# }
 
 if 'test' in sys.argv:
     SECURE_SSL_REDIRECT = False
