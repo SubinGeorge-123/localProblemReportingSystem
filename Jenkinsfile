@@ -109,21 +109,20 @@ pipeline {
                 script {
                     retry(2) {
                      sh """
-docker run --rm \
-    -e SONAR_TOKEN=${SONAR_TOKEN} \
-    -v \$PWD:/usr/src \
-    -w /usr/src \
-    sonarsource/sonar-scanner-cli:latest \
-    -Dsonar.projectKey=${SONAR_KEY} \
-    -Dsonar.organization=${SONAR_ORGANIZATION} \
-    -Dsonar.host.url=${SONAR_HOST_URL} \
-    -Dsonar.sources=. \
-    -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/**,**/*.sh \
-    -Dsonar.security.hotspot.exclusions=**/*.sh \
-    -Dsonar.login=${SONAR_TOKEN} \
-    -Dsonar.python.coverage.reportPaths=coverage.xml
-"""
-
+                        docker run --rm \
+                        -e SONAR_TOKEN=${SONAR_TOKEN} \
+                        -v \$PWD:/usr/src \
+                        -w /usr/src \
+                        sonarsource/sonar-scanner-cli:latest \
+                        -Dsonar.projectKey=${SONAR_KEY} \
+                        -Dsonar.organization=${SONAR_ORGANIZATION} \
+                        -Dsonar.host.url=${SONAR_HOST_URL} \
+                        -Dsonar.sources=. \
+                        -Dsonar.exclusions=**/venv/**,**/migrations/**,**/django/**,**/botocore/**,**/site-packages/**,**/*.sh \
+                        -Dsonar.security.hotspot.exclusions=**/*.sh \
+                        -Dsonar.login=${SONAR_TOKEN} \
+                        -Dsonar.python.coverage.reportPaths=coverage.xml
+                        """
                     }
                 }
             }
@@ -188,7 +187,7 @@ docker run --rm \
             }
         }
 
- stage('Deploy to EC2') {
+        stage('Deploy to EC2') {
             when {
                 expression { params.DEPLOY_EC2 }
             }
@@ -228,10 +227,10 @@ EOF
 
     post {
         failure {
-            echo "❌ Build ${BUILD_TAG} failed."
+            echo "Build ${BUILD_TAG} failed."
         }
         success {
-            echo "✅ Build ${BUILD_TAG} succeeded."
+            echo "Build ${BUILD_TAG} succeeded."
         }
     }
 }
