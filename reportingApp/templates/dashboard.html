@@ -55,8 +55,8 @@
   table {
     width: 100%;
     color: #1f2937;
-    background: #fff; /* full table background white */
-    border: 2px solid #000; /* full table border */
+    background: #fff;
+    border: 2px solid #000;
     border-collapse: collapse;
   }
 
@@ -68,7 +68,7 @@
   table td {
     vertical-align: middle;
     padding: 12px;
-    border: 2px solid #000; /* full cell borders */
+    border: 2px solid #000;
   }
 
   img {
@@ -109,6 +109,7 @@
       <thead>
         <tr>
           <th>Issue Name</th>
+          <th>Street No</th>
           <th>Priority</th>
           <th>Created At</th>
           <th>Category</th>
@@ -120,6 +121,7 @@
         {% for issue in issues %}
         <tr>
           <td>{{ issue.issue_name }}</td>
+          <td>{{ issue.street_no }}</td>
           <td>{{ issue.priority }}</td>
           <td>{{ issue.created_at|date:"Y-m-d H:i" }}</td>
           <td>{{ issue.category }}</td>
