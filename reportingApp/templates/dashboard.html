@@ -109,7 +109,6 @@
       <thead>
         <tr>
           <th>Issue Name</th>
-          <th>Street No</th>
           <th>Priority</th>
           <th>Created At</th>
           <th>Category</th>
@@ -121,7 +120,6 @@
         {% for issue in issues %}
         <tr>
           <td>{{ issue.issue_name }}</td>
-          <td>{{ issue.street_no }}</td>
           <td>{{ issue.priority }}</td>
           <td>{{ issue.created_at|date:"Y-m-d H:i" }}</td>
           <td>{{ issue.category }}</td>
